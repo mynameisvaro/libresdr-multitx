@@ -1,0 +1,3 @@
+[submodule "reference"]
+	path = reference
+	url = https://github.com/f4tnk/LibreSDR_UHD_B220_Mini_FPGA.git
