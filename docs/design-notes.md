@@ -59,6 +59,13 @@ Instead:
 Fastlock profiles are temperature sensitive. Re-store them if the board's
 temperature drifts a lot.
 
+**As built (phase 3):** fastlock turned out not to be needed yet. A
+synthesizer-only retune (UHD's register writes, no ENSM change, lock bit polled)
+relocks in about 110 µs and takes about 0.3 ms in all, less than a CC2500's own
+calibration time after `STX`. The slice grid starts at 2403.9 MHz so two 35.2 MHz
+slices at 61.44 MSPS cover FrSky's channels. Details in
+[multiprotocol.md](multiprotocol.md).
+
 ## Full duplex with digital TX gating
 
 The AD9361 runs in **FDD mode** with both synthesizers locked, and TX on/off is done

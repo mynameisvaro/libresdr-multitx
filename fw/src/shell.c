@@ -5,7 +5,10 @@
 #include "ad9361_spi.h"
 #include "axi_ad9361.h"
 #include "console.h"
+#include "cc2500.h"
 #include "gfsk.h"
+#include "mpm.h"
+#include "radio.h"
 #include "gpio.h"
 #include "hw.h"
 #include "rf.h"
@@ -29,11 +32,11 @@ static int cmd_help(int argc, char **argv);
 
 static int cmd_info(int argc, char **argv)
 {
-	extern char _code_end[], _heap_start[], _heap_end[];
+	extern char _code_end[], _code_limit[], _heap_start[], _heap_end[];
 
 	printf("MultiTX firmware %s, built %s\n", FW_VERSION, FW_BUILD_DATE);
 	printf("uptime   %lu ms\n", (unsigned long)timer_ms());
-	printf("code     %lu bytes of 252 KB\n", (unsigned long)_code_end);
+	printf("code     %lu bytes of %lu\n", (unsigned long)_code_end, (unsigned long)_code_limit);
 	printf("heap     %lu bytes at 0x%08lx\n",
 	       (unsigned long)(_heap_end - _heap_start), (unsigned long)_heap_start);
 	printf("console  session 0x%08lx, %lu bytes dropped\n",
@@ -140,6 +143,23 @@ static int cmd_rf(int argc, char **argv)
 	if (!strcmp(sub, "bw") && argc > 3 && !rf_dir_arg(argv[2], &dir)) {
 		if (!rf_set_bw(dir, strtod(argv[3], NULL), &v))
 			printf("%s bandwidth %.0f Hz\n", argv[2], v);
+		return 0;
+	}
+	if (!strcmp(sub, "fast") && argc > 3 && !rf_dir_arg(argv[2], &dir)) {
+		/* rf fast rx|tx HZ: fast retune with a lock-register trace */
+		uint8_t tr[300];
+		int ntr = sizeof(tr);
+		uint32_t us;
+		if (rf_fast_tune(dir, strtod(argv[3], NULL), &v, &us, tr, &ntr)) {
+			printf("fast tune failed\n");
+			return 0;
+		}
+		printf("%s LO %.0f Hz; lock register every ~%lu us:", argv[2], v,
+		       (unsigned long)(ntr ? us / ntr : 0));
+		for (int i = 0; i < ntr; i++)
+			if (i == 0 || tr[i] != tr[i - 1])
+				printf(" [%u]=%02x", i, tr[i]);
+		printf("\n");
 		return 0;
 	}
 	if (!strcmp(sub, "rssi")) {
@@ -301,6 +321,120 @@ static int cmd_gfsk(int argc, char **argv)
 	return -1;
 }
 
+static int cmd_mpm(int argc, char **argv)
+{
+	if (argc < 2)
+		return -1;
+	const char *sub = argv[1];
+
+	if (!strcmp(sub, "list")) {
+		mpm_list();
+		return 0;
+	}
+	if (!strcmp(sub, "start") && argc > 2) {
+		/* mpm start PROTO [SUB [RX [OPTION [bind]]]] */
+		int proto = mpm_proto_by_name(argv[2]);
+		int subp = argc > 3 ? (int)num(argv[3]) : 0;
+		int rx = argc > 4 ? (int)num(argv[4]) : 0;
+		int opt = argc > 5 ? (int)strtol(argv[5], NULL, 0) : 0;
+		int bind = argc > 6 && !strcmp(argv[6], "bind");
+		if (proto < 0) {
+			printf("unknown protocol '%s' (mpm list)\n", argv[2]);
+			return 0;
+		}
+		if (!radio_running()) {
+			printf("radio on (front end needs ~0.5 s)\n");
+			if (radio_start()) {
+				printf("radio start failed\n");
+				return 0;
+			}
+		}
+		int ret = mpm_start(proto, subp, rx, opt, bind);
+		if (ret)
+			printf("start failed (%s)\n", ret == -1 ? "protocol not built in" : "bad sub-protocol");
+		else
+			mpm_print_status();
+		return 0;
+	}
+	if (!strcmp(sub, "binddone")) {
+		mpm_bind_done();
+		return 0;
+	}
+	if (!strcmp(sub, "stop")) {
+		mpm_stop();
+		radio_stop();
+		return 0;
+	}
+	if (!strcmp(sub, "ch") && argc > 3) {
+		/* mpm ch N VALUE: channel 1..16, 0..2047 (1024 centre, 204/1844 = -/+100%) */
+		mpm_set_channel(num(argv[2]) - 1, num(argv[3]));
+		return 0;
+	}
+	if (!strcmp(sub, "id") && argc > 2) {
+		mpm_set_id(num(argv[2]));
+		return 0;
+	}
+	if (!strcmp(sub, "hops")) {
+		int n;
+		const uint8_t *h = mpm_hopping_table(&n);
+		for (int i = 0; i < n; i++)
+			printf("%s%d", i ? " " : "", h[i]);
+		printf("\n");
+		return 0;
+	}
+	if (!strcmp(sub, "status")) {
+		const struct radio_stats *r = radio_get_stats();
+		const struct cc2500_info *c = cc2500_get_info();
+		mpm_print_status();
+		printf("radio %s, %lu packets, LO %.3f MHz, %lu retunes (last %lu us, max %lu us)\n",
+		       radio_running() ? "on" : "off", (unsigned long)r->packets, r->lo_hz / 1e6,
+		       (unsigned long)r->retunes, (unsigned long)r->last_retune_us,
+		       (unsigned long)r->max_retune_us);
+		printf("rate %.0f, slice %.0f, capture LO %.0f, capture freq %.0f\n", r->rate_hz,
+		       r->slice_hz, r->cap_lo_hz, r->cap_freq_hz);
+		printf("cc2500 state 0x%02x, %lu packets, %lu errors, last %.4f MHz, %.0f baud, dev %.0f Hz\n",
+		       c->marcstate, (unsigned long)c->tx_packets, (unsigned long)c->tx_errors,
+		       c->last_freq_hz / 1e6, c->baud, c->dev_hz);
+		return 0;
+	}
+	return -1;
+}
+
+static int cmd_radio(int argc, char **argv)
+{
+	if (argc > 2 && !strcmp(argv[1], "rate")) {
+		if (radio_running()) {
+			printf("stop the protocol first (mpm stop)\n");
+			return 0;
+		}
+		radio_set_rate(strtod(argv[2], NULL));
+		return 0;
+	}
+	if (argc > 2 && !strcmp(argv[1], "rxfollow")) {
+		radio_rx_follow(num(argv[2]) != 0);
+		return 0;
+	}
+	if (argc > 1 && !strcmp(argv[1], "capture")) {
+		radio_capture_next();
+		return 0;
+	}
+	return -1;
+}
+
+static int cmd_cc2500(int argc, char **argv)
+{
+	const struct cc2500_info *c = cc2500_get_info();
+	const uint8_t *r = cc2500_regs();
+
+	for (int i = 0; i < 0x2F; i++)
+		printf("%s%02x", i % 16 ? " " : (i ? "\n" : ""), r[i]);
+	printf("\nlast packet (%d bytes):", c->last_len);
+	for (int i = 0; i < c->last_len; i++)
+		printf(" %02x", c->last_pkt[i]);
+	printf("\n");
+	return 0;
+}
+
 static int cmd_reboot(int argc, char **argv)
 {
 	printf("rebooting\n");
@@ -322,6 +456,10 @@ static const struct shell_cmd cmds[] = {
 	{ "dds",     "HZ [DBFS] | off", "TX1 test tone from the FPGA DDS (default -12 dBFS)", cmd_dds },
 	{ "gfsk",    "SUBCMD ...",     "modulator: cfg BAUD DEV [BT] | cc2500 d8|d16 | chan HZ |\n"
 	  "                             level DBFS [RAMP_US] | cw on|off | send [-c] HEX | status", cmd_gfsk },
+	{ "mpm",     "SUBCMD ...",     "Multiprotocol: list | start PROTO [SUB [RX [OPT [bind]]]] |\n"
+	  "                             binddone | stop | ch N VALUE | id HEX | hops | status", cmd_mpm },
+	{ "radio",   "SUBCMD ...",     "rate HZ | rxfollow 0|1 | capture (next packet)", cmd_radio },
+	{ "cc2500",  "",               "virtual CC2500 registers and last packet", cmd_cc2500 },
 	{ "reboot",  "",               "restart the firmware",            cmd_reboot },
 };
 

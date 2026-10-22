@@ -19,6 +19,12 @@ volatile struct mailbox mailbox __attribute__((section(".mailbox")));
 static int dropping;
 static int last_from_uart;
 
+/* UART output is buffered and drained from the main loop (console_poll), so a
+ * long print never stalls the protocol timing at 115200 baud. */
+#define UART_BUF 2048
+static char     uart_buf[UART_BUF];
+static uint32_t uart_head, uart_tail, uart_dropped;
+
 void console_init(void)
 {
 	/* the mailbox isn't part of the loaded image, so it survives a reload */
@@ -65,9 +71,17 @@ static void mailbox_putc(char c)
 
 static void uart_putc(char c)
 {
-	while (rd32(UART_BASE + UART_STAT) & STAT_TX_FULL)
-		;
-	wr32(UART_BASE + UART_TX, (uint8_t)c);
+	if (uart_head - uart_tail >= UART_BUF) {
+		uart_dropped++;
+		return;
+	}
+	uart_buf[uart_head++ % UART_BUF] = c;
+}
+
+void console_poll(void)
+{
+	while (uart_tail != uart_head && !(rd32(UART_BASE + UART_STAT) & STAT_TX_FULL))
+		wr32(UART_BASE + UART_TX, (uint8_t)uart_buf[uart_tail++ % UART_BUF]);
 }
 
 void console_write(const char *buf, int len)

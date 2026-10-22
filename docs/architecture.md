@@ -13,7 +13,7 @@ flowchart LR
 
   subgraph cpu["CPU"]
     mb["sys_mb<br/>MicroBlaze"]
-    code["code_ram 256 KB<br/>(dual port)"]
+    code["code_ram 512 KB<br/>(dual port)"]
     data["data_ram 64 KB"]
     mb -->|ILMB| code
     mb -->|DLMB| data
@@ -40,7 +40,7 @@ flowchart LR
 | Block | What it does |
 |---|---|
 | `sys_mb` | MicroBlaze, 100 MHz, barrel shifter, multiplier, divider, debug module (for a future JTAG cable) |
-| `code_ram` | 256 KB. Port A: instruction LMB. Port B: AXI, used for data reads and for loading code over USB |
+| `code_ram` | 512 KB. Port A: instruction LMB. Port B: AXI, used for data reads and for loading code over USB |
 | `data_ram` | 64 KB on the data LMB: stack, variables |
 | `usb_debug_bridge` | executes PC commands as AXI reads/writes; can hold the CPU in reset |
 | `axi_ad9361` | ADI core in CMOS dual-port mode, TDD engine off, built-in DDS for test tones |
@@ -51,7 +51,7 @@ flowchart LR
 | `gpio_ctrl` | AD9361 RESETB, EN_AGC, SYNC, CTRL_IN, ENABLE/TXNRX request; CTRL_OUT inputs |
 | `gpio_dac` → `tcxo_dac` | 40 MHz TCXO tuning word, shifted out to the DAC on change |
 
-The MicroBlaze runs from `code_ram` (256 KB). Its instruction side uses LMB port A;
+The MicroBlaze runs from `code_ram` (512 KB). Its instruction side uses LMB port A;
 port B sits on the AXI bus, so the USB bridge can load new code while the CPU is held
 in reset (bridge `ctrl_reg` bit 0). Stack and variables live in the fast `data_ram`
 (64 KB, LMB only). `.data` initial values must be copied from `code_ram` at start-up.
@@ -60,7 +60,7 @@ in reset (bridge `ctrl_reg` bit 0). Stack and variables live in the fast `data_r
 
 | Address | Size | Block | Reached by |
 |---|---|---|---|
-| `0x0000_0000` | 256 KB | `code_ram` (instruction LMB / AXI port) | CPU (I + D), USB |
+| `0x0000_0000` | 512 KB | `code_ram` (instruction LMB / AXI port) | CPU (I + D), USB |
 | `0x0010_0000` | 64 KB | `data_ram` (data LMB) | CPU (D) only |
 | `0x4000_0000` | 64 KB | `gpio_fe` — RF front end | CPU, USB |
 | `0x4001_0000` | 64 KB | `gpio_ctrl` — AD9361 control lines | CPU, USB |

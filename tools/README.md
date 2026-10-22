@@ -11,6 +11,7 @@ board running a MultiTX bitstream.
 | [`rf_tone.py`](rf_tone.py) | over-the-air check: DDS tone out of TX/RX, received on RX2 (cable + attenuator), reports tone, LO leakage, images, DC; `--plot` saves the spectrum |
 | [`gfsk_test.py`](gfsk_test.py) | sends FrSky D8/D16-style packets through `gfsk_tx` and demodulates them (digital loopback or RF) |
 | [`gfsk.py`](gfsk.py) | GFSK helpers: pulse table, phase increments, CC2500 maths, demodulator; also writes `gfsk_tx`'s sin/cos ROM |
+| [`frsky_check.py`](frsky_check.py) | runs Multiprotocol's FrSky D8/D16 on the board and decodes captured packets like a CC2500 (CRC, hop channel, offset) |
 | [`selftest.py`](selftest.py) | hardware self-test: bridge, memory, registers, AD9361 SPI |
 | [`test_usbdbg_cosim.py`](test_usbdbg_cosim.py) | runs `usbdbg.py`'s packets through the RTL in xsim to check that both agree on the wire format |
 

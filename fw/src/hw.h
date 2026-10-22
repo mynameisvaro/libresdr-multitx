@@ -4,7 +4,7 @@
 
 #include <stdint.h>
 
-#define CODE_RAM_BASE    0x00000000u   /* 256 KB, instruction LMB + AXI */
+#define CODE_RAM_BASE    0x00000000u   /* 512 KB, instruction LMB + AXI */
 #define DATA_RAM_BASE    0x00100000u   /* 64 KB, data LMB */
 #define GPIO_FE_BASE     0x40000000u   /* RF switch / LED word per channel */
 #define GPIO_CTRL_BASE   0x40010000u   /* AD9361 control lines */

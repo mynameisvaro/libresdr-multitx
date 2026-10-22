@@ -3,7 +3,9 @@
 MicroBlaze firmware for the MultiTX platform. Plain Makefile, MicroBlaze GCC from
 Vitis 2022.2 and newlib, with no Xilinx BSP. The start-up code, linker script and
 drivers are all here. The AD9361 is driven by UHD's own AD9361 driver (C++,
-[`third_party/uhd_ad9361`](third_party/uhd_ad9361)), set up as a B210.
+[`third_party/uhd_ad9361`](third_party/uhd_ad9361)), set up as a B210. Multiprotocol's
+protocol code runs unmodified from the [`third_party/multiprotocol`](third_party/multiprotocol)
+submodule against a virtual CC2500; see [docs/multiprotocol.md](../docs/multiprotocol.md).
 
 ```bash
 make            # build/multitx_fw.elf, .bin, .map
@@ -27,6 +29,10 @@ mtx> gfsk chan 300e3          # NCO offset from the TX LO
 mtx> gfsk level -6 20         # -6 dBFS, 20 us ramp
 mtx> gfsk send AAAAAAAAD391D391 1D0102  # bytes as hex, sent MSB first
 mtx> fe 1 off
+mtx> mpm start frskyx         # Multiprotocol FrSky X (D16), radio at 61.44 MSPS
+mtx> mpm ch 1 1844            # channel 1 to +100%
+mtx> mpm status
+mtx> mpm stop
 ```
 
 `python3 ../tools/rf_loopback.py` checks the FPGA ↔ AD9361 sample interface at
@@ -41,8 +47,8 @@ rebuild the bitstream to change the firmware.
 
 | Region | Address | Size | Contents |
 |---|---|---|---|
-| `code_ram` | `0x0000_0000` | 252 KB | vectors, `.text`, `.rodata`, `.data` load image |
-| mailbox | `0x0003_F000` | 4 KB | console rings, shared with the USB bridge |
+| `code_ram` | `0x0000_0000` | 508 KB | vectors, `.text`, `.rodata`, `.data` load image |
+| mailbox | `0x0007_F000` | 4 KB | console rings, shared with the USB bridge |
 | `data_ram` | `0x0010_0000` | 64 KB | `.data`, `.bss`, heap, 16 KB stack |
 
 The CPU fetches code over the instruction LMB and reads constants from the same
@@ -76,6 +82,9 @@ The session counter changes at every boot, which lets the host notice a reload.
 | [`axi_ad9361.c`](src/axi_ad9361.c) | FPGA side of the data port: ADI core set-up (1R1T, inverted FB_CLK), its DDS, TX source select |
 | [`gfsk.c`](src/gfsk.c) | `gfsk_tx` driver: Gaussian pulse table, phase increments, packets; CC2500 rate/deviation maths |
 | [`uhd_shim/`](src/uhd_shim) | stand-ins for the UHD/Boost headers the driver includes |
+| [`radio.c`](src/radio.c) | radio layer: LO slices with fast retunes, NCO offset, modem cache, power, front end |
+| [`cc2500.c`](src/cc2500.c) | virtual CC2500: SPI slave with registers, strobes, FIFO; builds and sends packets |
+| [`mpm/`](src/mpm) | Multiprotocol port: Arduino shim, core (globals, start-up, scheduler) |
 | [`hw.h`](src/hw.h) | address map and register access helpers |
 
 The compiler flags in the [`Makefile`](Makefile) must match the MicroBlaze
@@ -94,7 +103,6 @@ libstdc++ small: the exception shim stores its message in a fixed buffer, so no
 `std::string`, and `rf.cpp` replaces the verbose terminate handler, so the
 demangler is never linked.
 
-Code size today is about 189 KB text plus 11 KB initialised data, of the 252 KB
-in `code_ram`. Most of it is the driver (~45 KB), soft-float double maths, printf
-and the C++ unwinder. If protocol code later needs more room, `code_ram` can grow
-in the block design: the XC7A200T has plenty of block RAM left.
+Code size today is about 226 KB text plus 12 KB initialised data, of the 508 KB
+in `code_ram` (512 KB since phase 3). The biggest parts are the AD9361 driver
+(~45 KB), soft-float double maths, printf and the C++ unwinder.

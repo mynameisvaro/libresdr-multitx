@@ -22,7 +22,7 @@ CPUFLAGS = -mcpu=v11.0 -mlittle-endian -mxl-barrel-shift -mxl-pattern-compare \
            -mno-xl-soft-mul -mno-xl-soft-div -mxl-reorder
 
 CFLAGS  = $(CPUFLAGS) -Os -g -std=gnu11 -Wall -Wextra -Wno-unused-parameter \
-          -ffunction-sections -fdata-sections -Isrc -I$(BUILD)
+          -ffunction-sections -fdata-sections -Isrc -Isrc/mpm -I$(BUILD)
 
 # UHD's AD9361 driver (C++, exceptions on, no RTTI), built against the stand-in
 # headers in src/uhd_shim; see third_party/uhd_ad9361/README.md.
@@ -30,6 +30,11 @@ UHD_AD9361 = third_party/uhd_ad9361
 CXXFLAGS = $(CPUFLAGS) -Os -g -std=gnu++17 -Wall -fno-rtti -fno-threadsafe-statics \
            -ffunction-sections -fdata-sections -DAD9361_NO_FILTER_API \
            -Isrc -Isrc/uhd_shim -I$(UHD_AD9361) -I$(BUILD)
+
+# Multiprotocol's protocol files (git submodule, unmodified), built as one
+# translation unit by src/mpm/mpm_core.cpp. -fpermissive as in the Arduino IDE.
+MPM = third_party/multiprotocol/Multiprotocol
+MPM_CXXFLAGS = $(CXXFLAGS) -fpermissive -w -Isrc/mpm -I$(MPM)
 
 # crti/crtbegin and crtend/crtn bracket the objects: they provide .init (which
 # registers the C++ unwind tables) and the constructor lists.
@@ -44,7 +49,8 @@ LDFLAGS = $(CPUFLAGS) -nostartfiles -nostdlib -T linker.ld \
 LDLIBS  = -Wl,--start-group -lstdc++ -lc -lm -lgcc -Wl,--end-group
 
 SRCS = src/crt0.S src/syscalls.c src/main.c src/console.c src/timer.c \
-       src/gpio.c src/ad9361_spi.c src/axi_ad9361.c src/gfsk.c src/shell.c src/rf.cpp
+       src/gpio.c src/ad9361_spi.c src/axi_ad9361.c src/gfsk.c src/radio.c \
+       src/cc2500.c src/shell.c src/rf.cpp src/mpm/mpm_core.cpp
 OBJS = $(patsubst src/%,$(BUILD)/%.o,$(SRCS)) $(BUILD)/uhd_ad9361/ad9361_device.cpp.o
 
 all: $(TARGET).bin
@@ -62,6 +68,10 @@ $(BUILD)/%.c.o: src/%.c $(BUILD)/version.h | $(BUILD)
 $(BUILD)/%.cpp.o: src/%.cpp | $(BUILD)
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -MMD -c $< -o $@
+
+$(BUILD)/mpm/%.cpp.o: src/mpm/%.cpp $(BUILD)/version.h | $(BUILD)
+	@mkdir -p $(dir $@)
+	$(CXX) $(MPM_CXXFLAGS) -MMD -c $< -o $@
 
 $(BUILD)/uhd_ad9361/%.cpp.o: $(UHD_AD9361)/%.cpp | $(BUILD)
 	@mkdir -p $(dir $@)

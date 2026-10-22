@@ -1,0 +1,22 @@
+/* Multiprotocol runner (mpm_core.cpp): starts protocols and runs their callbacks. */
+#ifndef MPM_H
+#define MPM_H
+
+#include <stdint.h>
+
+void mpm_init(void);
+void mpm_set_id(uint32_t id);
+/* proto/sub as in Multiprotocol (FrSky D = 3, FrSky X = 15). 0 ok, -1 unknown
+ * protocol, -2 invalid sub-protocol. */
+int  mpm_start(int proto, int sub, int rx_num, int option, int bind);
+void mpm_stop(void);
+void mpm_bind_done(void);
+int  mpm_running(void);
+void mpm_poll(void);                     /* call from the main loop */
+void mpm_set_channel(int ch, int value); /* 0..2047, 1024 = centre */
+void mpm_print_status(void);
+void mpm_list(void);
+int  mpm_proto_by_name(const char *name);   /* name or number -> protocol, -1 */
+const uint8_t *mpm_hopping_table(int *n);
+
+#endif

@@ -5,7 +5,7 @@
 
 #include <stdint.h>
 
-#define MAILBOX_ADDR      0x0003F000u
+#define MAILBOX_ADDR      0x0007F000u   /* top 4 KB of code_ram */
 #define MAILBOX_MAGIC     0x434F4E53u    /* "CONS" */
 #define CONSOLE_TX_SIZE   2048           /* bytes, power of two */
 #define CONSOLE_RX_SIZE   256            /* characters, one per 32-bit word */
@@ -34,5 +34,6 @@ void console_init(void);
 void console_write(const char *buf, int len);
 int  console_getc(void);         /* -1 if nothing waiting */
 int  console_from_uart(void);    /* last character came from the UART (needs echo) */
+void console_poll(void);         /* drain the UART output buffer (main loop) */
 
 #endif

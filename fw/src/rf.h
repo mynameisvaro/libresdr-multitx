@@ -4,6 +4,8 @@
 #ifndef RF_H
 #define RF_H
 
+#include <stdint.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -20,7 +22,12 @@ int rf_set_gain(enum rf_dir dir, double db, double *actual);   /* TX: 0..89.75 d
 int rf_set_bw(enum rf_dir dir, double hz, double *actual);
 int rf_rssi(double *db);
 int rf_temperature(double *deg_c);
-int rf_loopback(int on);                              /* AD9361 digital TX -> RX loopback */
+int rf_loopback(int on);
+/* LO retune in the FDD state without calibrations (~0.15 ms), for hopping
+ * between LO slices. lock_us: time to lock. trace/ntrace: optional record of
+ * the lock register, one sample every ~10 us (ntrace in: size, out: count). */
+int rf_fast_tune(enum rf_dir dir, double hz, double *actual, uint32_t *lock_us,
+                 uint8_t *trace, int *ntrace);                              /* AD9361 digital TX -> RX loopback */
 
 #ifdef __cplusplus
 }

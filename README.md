@@ -14,13 +14,13 @@ front of the AD9361. ExpressLRS support is planned on the same foundation.
 ![Vivado](https://img.shields.io/badge/Vivado-2022.2-blue)
 ![FPGA](https://img.shields.io/badge/FPGA-Artix--7%20XC7A200T-orange)
 ![RF](https://img.shields.io/badge/RF-AD9361-green)
-![Status](https://img.shields.io/badge/status-GFSK%20TX-yellow)
+![Status](https://img.shields.io/badge/status-FrSky%20D8%2FD16-yellow)
 ![License](https://img.shields.io/badge/license-GPL--3.0-lightgrey)
 
 > **Status:** the FPGA platform, the MicroBlaze firmware and the AD9361 driver work
-> on hardware, and the GFSK modulator sends FrSky D8/D16-style packets that
-> decode without errors over the air. Protocols come next; see the
-> [roadmap](#roadmap).
+> on hardware. Multiprotocol's own FrSky D8/D16 code runs on a virtual CC2500 and
+> its hopping packets decode correctly off the air; testing with a real receiver
+> is next. See the [roadmap](#roadmap).
 
 ## How it works
 
@@ -102,6 +102,7 @@ Running the board on a remote machine over USB/IP: [docs/remote-usb.md](docs/rem
 | [development.md](docs/development.md) | building, simulating, loading, verifying |
 | [remote-usb.md](docs/remote-usb.md) | USB/IP + SSH tunnel setup, VM-side FPGA loading |
 | [design-notes.md](docs/design-notes.md) | why the project is built the way it is |
+| [multiprotocol.md](docs/multiprotocol.md) | the Multiprotocol port, the virtual CC2500, hopping, testing with a receiver |
 
 ## Roadmap
 
@@ -112,9 +113,11 @@ Running the board on a remote machine over USB/IP: [docs/remote-usb.md](docs/rem
 - [x] AD9361 driver in the firmware (UHD's, GPL-3.0), sample interface verified to 61.44 MSPS
 - [x] First RF: DDS tone out of TX/RX, received on RX2 at 2.4 GHz ([results](docs/hardware.md#first-rf-test))
 - [x] GFSK/FSK TX modem with channel NCO (`gfsk_tx`), FrSky D8/D16 packets decoded over the air
-- [ ] LO slice switching with AD9361 fastlock (FrSky hops over 2404–2474.5 MHz, wider than one slice)
+- [x] LO slice switching (fast synthesizer retune, ~0.3 ms; fastlock not needed so far)
+- [x] Virtual CC2500 + Multiprotocol's FrSky D8/D16 code, packets verified off the air ([docs/multiprotocol.md](docs/multiprotocol.md))
+- [ ] Bind and fly with a real FrSky receiver
+- [ ] Handset input (Multiprotocol serial protocol from EdgeTX/OpenTX)
 - [ ] GFSK receive path (telemetry, bind replies)
-- [ ] CC2500 shim → FrSky D8/D16 (first target receivers: FrSky)
 - [ ] A7105 shim → FlySky AFHDS / AFHDS2A
 - [ ] Telemetry / receive path, bind
 - [ ] NRF24L01, CYRF6936 (DSSS), SX1276 (LoRa) shims
@@ -126,14 +129,16 @@ Running the board on a remote machine over USB/IP: [docs/remote-usb.md](docs/rem
 - [DIY Multiprotocol TX Module](https://github.com/pascallanger/DIY-Multiprotocol-TX-Module) — the protocol implementations this project builds on
 - [ExpressLRS](https://github.com/ExpressLRS/ExpressLRS)
 - [f4tnk/LibreSDR_UHD_B220_Mini_FPGA](https://github.com/f4tnk/LibreSDR_UHD_B220_Mini_FPGA) — the B220 FPGA design, pinout and timing constraints
-- [Ettus Research UHD/FPGA](https://github.com/EttusResearch/uhd) — GPIF II slave-FIFO and FIFO code
+- [Ettus Research UHD/FPGA](https://github.com/EttusResearch/uhd) — GPIF II slave-FIFO and FIFO code, and the AD9361 driver the firmware uses
 - [Analog Devices HDL](https://github.com/analogdevicesinc/hdl) — `axi_ad9361`
 
 ## License
 
 GPL-3.0-or-later, see [LICENSE](LICENSE). Files under `hw/ip/usb_debug_bridge/ettus/`
 and `hw/ip/tcxo_dac/` are Ettus Research code under LGPL-3.0-or-later, with local
-changes noted in their headers.
+changes noted in their headers. `fw/third_party/uhd_ad9361/` is UHD's AD9361 driver
+(GPL-3.0-or-later, changes listed in its README), and `fw/third_party/multiprotocol`
+is a submodule of DIY Multiprotocol (GPL-3.0-or-later).
 
 **Regulatory note:** transmitting is your responsibility. Check the rules for your
 band and region, and keep power within legal limits.

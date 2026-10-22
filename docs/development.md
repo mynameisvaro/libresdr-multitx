@@ -13,6 +13,9 @@
 git clone --recurse-submodules <this repo>     # or: git submodule update --init
 ```
 
+Submodules: `reference/` (the B220 FPGA design) and `fw/third_party/multiprotocol`
+(Multiprotocol's sources, built into the firmware).
+
 ## Build
 
 ```bash
@@ -33,12 +36,12 @@ the change back to `system_bd.tcl` (or `write_bd_tcl` and merge it).
 The reference design rebuilds the same way:
 `vivado -mode batch -source hw/ref_b220/create_project.tcl -tclargs build`.
 
-### Last build (phase 2: gfsk_tx)
+### Last build (phase 3: 512 KB code_ram)
 
 | | |
 |---|---|
-| Timing | met, WNS +0.75 ns, WHS +0.031 ns |
-| Utilization | 9.5% LUT, 35% BRAM, 4.7% DSP |
+| Timing | met, WNS +0.83 ns, WHS +0.036 ns |
+| Utilization | 9.5% LUT, 52% BRAM, 4.7% DSP |
 
 ## Simulate
 
@@ -103,4 +106,4 @@ call can batch many commands into a single USB round trip.
 8/8 passed
 ```
 
-`--full` tests the whole 256 KB code RAM (it passed with 0 mismatches during bring-up).
+`--full` tests the whole code RAM (512 KB since phase 3; the 256 KB version passed with 0 mismatches during bring-up).

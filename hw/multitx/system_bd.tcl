@@ -3,7 +3,7 @@
 #   CLK_40MHz_FPGA ──► sys_clkgen ──► sys_clk 100 MHz (CPU, AXI, USB bridge)
 #                                └──► delay_clk 200 MHz (AD9361 input delays)
 #
-#   sys_mb (MicroBlaze) ─ ILMB ─► code_ram port A   (code, 256 KB @ 0x0000_0000)
+#   sys_mb (MicroBlaze) ─ ILMB ─► code_ram port A   (code, 512 KB @ 0x0000_0000)
 #                       ─ DLMB ─► data_ram          (stack/data, 64 KB @ 0x0010_0000)
 #                       ─ M_AXI_DP ─┐
 #   usb_debug_bridge ─ m_axi ───────┴─► axi_cpu_interconnect ─► peripherals,
@@ -325,8 +325,8 @@ proc place {cell offset range masters} {
     }
   }
 }
-place ilmb_cntlr   0x00000000 256K I
-place code_ram_axi 0x00000000 256K DU
+place ilmb_cntlr   0x00000000 512K I
+place code_ram_axi 0x00000000 512K DU
 place dlmb_cntlr   0x00100000 64K  D
 place gpio_fe      0x40000000 64K  DU
 place gpio_ctrl    0x40010000 64K  DU

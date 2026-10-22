@@ -39,11 +39,15 @@ static double pulse(double t, double bt)
 	return 0.5 * (erf(k * (t + 0.5)) - erf(k * (t - 0.5)));
 }
 
-void gfsk_config(double fs, double baud, double dev_hz, double bt)
+/* The pulse table needs ~1500 soft-float erf() calls (~0.3 s on the MicroBlaze),
+ * so it is computed once per BT and kept. */
+static int16_t table[3][TABLE_POS];
+static double  table_bt = -1;
+
+void gfsk_precompute(double bt)
 {
-	cur_fs = fs;
-	wr32(GFSK_TX_BASE + BAUD_INC, phase_inc(baud, fs));
-	wr32(GFSK_TX_BASE + DEV_INC, phase_inc(dev_hz, fs));
+	if (bt == table_bt)
+		return;
 	/* SHAPE[k][pos]: previous (k = 0), current, next symbol's pulse at this
 	 * position in the current symbol; renormalised so a run of ones gives 1.0 */
 	for (int p = 0; p < TABLE_POS; p++) {
@@ -53,8 +57,20 @@ void gfsk_config(double fs, double baud, double dev_hz, double bt)
 			sum += v[k];
 		}
 		for (int k = 0; k < 3; k++)
-			wr32(GFSK_TX_BASE + SHAPE(k, p), (uint32_t)lround(32767 * v[k] / sum) & 0xFFFF);
+			table[k][p] = (int16_t)lround(32767 * v[k] / sum);
 	}
+	table_bt = bt;
+}
+
+void gfsk_config(double fs, double baud, double dev_hz, double bt)
+{
+	cur_fs = fs;
+	wr32(GFSK_TX_BASE + BAUD_INC, phase_inc(baud, fs));
+	wr32(GFSK_TX_BASE + DEV_INC, phase_inc(dev_hz, fs));
+	gfsk_precompute(bt);
+	for (int k = 0; k < 3; k++)
+		for (int p = 0; p < TABLE_POS; p++)
+			wr32(GFSK_TX_BASE + SHAPE(k, p), (uint16_t)table[k][p]);
 	axi_ad9361_tx_source(AXI_AD9361_TX_GFSK);
 }
 

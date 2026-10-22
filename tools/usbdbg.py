@@ -33,7 +33,7 @@ CHUNK = 1024                            # words per command: keeps packets < 16 
 
 CODE_RAM = 0x0000_0000
 ADC_CAPTURE = 0x4400_0000
-MAILBOX = 0x0003_F000                   # firmware console, see fw/src/console.h
+MAILBOX = 0x0007_F000                   # firmware console, see fw/src/console.h
 MAILBOX_MAGIC = 0x434F4E53
 PROMPT = b"mtx> "
 

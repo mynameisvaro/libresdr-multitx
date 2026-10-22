@@ -1,7 +1,7 @@
 /* MultiTX MicroBlaze firmware memory layout.
  *
- *   code_ram 0x0000_0000  256 KB  vectors, code, read-only data, .data load image
- *            0x0003_F000    4 KB  console mailbox (shared with the USB bridge)
+ *   code_ram 0x0000_0000  512 KB  vectors, code, read-only data, .data load image
+ *            0x0007_F000    4 KB  console mailbox (shared with the USB bridge)
  *   data_ram 0x0010_0000   64 KB  .data, .bss, heap, stack
  *
  * The CPU fetches code over the instruction LMB and reads constants from the
@@ -15,8 +15,8 @@ _STACK_SIZE = 16K;
 
 MEMORY
 {
-	code    (rx)  : ORIGIN = 0x00000000, LENGTH = 0x3F000
-	mailbox (rw)  : ORIGIN = 0x0003F000, LENGTH = 0x1000
+	code    (rx)  : ORIGIN = 0x00000000, LENGTH = 0x7F000
+	mailbox (rw)  : ORIGIN = 0x0007F000, LENGTH = 0x1000
 	data    (rw)  : ORIGIN = 0x00100000, LENGTH = 64K
 }
 
@@ -104,6 +104,7 @@ SECTIONS
 	} > mailbox
 
 	_code_end = LOADADDR(.data) + SIZEOF(.data);
+	_code_limit = ORIGIN(code) + LENGTH(code);
 
 	/DISCARD/ : { *(.note.*) *(.comment) }
 }

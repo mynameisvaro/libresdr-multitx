@@ -5,7 +5,7 @@ Checks, in order: USB bridge, code_ram write/readback, GPIO reset values,
 axi_ad9361 core registers, timer, and the AD9361 product ID over SPI.
 
   selftest.py           quick memory test (16 KB)
-  selftest.py --full    whole code_ram (256 KB, ~30 s over USB/IP)
+  selftest.py --full    whole code_ram (512 KB, ~1 min over USB/IP)
 
 Note: the memory test overwrites code_ram (holds the CPU in reset while it runs),
 and the AD9361 test releases the AD9361 from reset.
@@ -39,7 +39,7 @@ def main(argv):
     adcc = rd(ADC_CAPTURE + 0x0C)
     check("adc_capture id", adcc == 0x4144_4343, f"{adcc:#010x}")
 
-    nwords = 65536 if full else 4096
+    nwords = 131072 if full else 4096
     words = [random.getrandbits(32) for _ in range(nwords)]
     br.ctrl(1)
     t = time.time()

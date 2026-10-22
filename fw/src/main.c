@@ -5,6 +5,7 @@
 #include "console.h"
 #include "gpio.h"
 #include "hw.h"
+#include "mpm.h"
 #include "shell.h"
 #include "timer.h"
 #include "version.h"
@@ -20,6 +21,7 @@ int main(void)
 	console_init();
 	gpio_init();
 	ad9361_spi_init();
+	mpm_init();
 
 	printf("\nMultiTX firmware %s (%s)\n", FW_VERSION, FW_BUILD_DATE);
 	shell_init();
@@ -37,5 +39,7 @@ int main(void)
 				gpio_ctrl_set(CTRL_LED);
 		}
 		shell_poll();
+		mpm_poll();
+		console_poll();
 	}
 }

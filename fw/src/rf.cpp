@@ -7,6 +7,7 @@
 
 extern "C" {
 #include "ad9361_spi.h"
+#include "timer.h"
 #include "axi_ad9361.h"
 #include "rf.h"
 }
@@ -135,6 +136,91 @@ extern "C" int rf_set_rate(double hz, double* actual)
         dev->set_active_chains(true, false, true, false);
         rx_tracking_on();
     });
+}
+
+// UHD's synthesiser tables (third_party/uhd_ad9361/ad9361_synth_lut.h)
+extern double vco_index[53];
+extern int synth_cal_lut[53][12];
+
+// Fast retune between LO slices: the register writes of UHD's _tune_helper()
+// and _setup_synth(), without the ENSM trip through ALERT and with the PLL lock
+// bit polled instead of a fixed 2 ms wait (the TX PLL locks in ~110 us on this
+// board; the lock bit reads 0 right after the integer word is written, so it is
+// safe to poll at once). Port A only (all band edges are 0). The RX synthesiser
+// registers sit 0x40 below the TX ones. UHD's own frequency bookkeeping is not
+// updated: use rf_tune() again before relying on rf_get_freq().
+// trace: optional record of the lock register, one sample every ~10 us.
+extern "C" int rf_fast_tune(rf_dir d, double hz, double* actual, uint32_t* lock_us,
+                            uint8_t* trace, int* ntrace)
+{
+    const double fref = 80e6;
+    const int modulus = 8388593;
+    const uint16_t b = d == RF_TX ? 0x40 : 0;     // TX registers = RX + 0x40
+    int i, vcodiv = 2;
+    double vcorate = 0;
+
+    if (!dev)
+        return -1;
+    for (i = 0; i <= 6; i++) {
+        vcodiv  = 2 << i;
+        vcorate = hz * vcodiv;
+        if (vcorate >= 6e9 && vcorate <= 12e9)
+            break;
+    }
+    if (i == 7)
+        return -1;
+    int nint  = static_cast<int>(vcorate / fref);
+    int nfrac = static_cast<int>(((vcorate / fref) - nint) * modulus);
+    double actual_vcorate = fref * (nint + (double)nfrac / modulus);
+
+    int vi = 0;
+    for (int k = 0; k < 53; k++) {
+        vi = k;
+        if (actual_vcorate > vco_index[k])
+            break;
+    }
+    const int* lut = synth_cal_lut[vi];
+    ad9361_spi_write(b + 0x23a, 0x40 | lut[0]);
+    ad9361_spi_write(b + 0x239, 0xC0 | lut[1]);
+    ad9361_spi_write(b + 0x242, lut[2] | (lut[3] << 3));
+    ad9361_spi_write(b + 0x238, lut[4] << 3);
+    ad9361_spi_write(b + 0x245, 0x00);
+    ad9361_spi_write(b + 0x251, lut[5]);
+    ad9361_spi_write(b + 0x250, 0x70);
+    ad9361_spi_write(b + 0x23b, 0x80 | lut[6]);
+    ad9361_spi_write(b + 0x23e, lut[8] | (lut[7] << 4));
+    ad9361_spi_write(b + 0x23f, lut[10] | (lut[9] << 4));
+    ad9361_spi_write(b + 0x240, lut[11]);
+    ad9361_spi_write(b + 0x233, nfrac & 0xFF);
+    ad9361_spi_write(b + 0x234, (nfrac >> 8) & 0xFF);
+    ad9361_spi_write(b + 0x235, (nfrac >> 16) & 0xFF);
+    ad9361_spi_write(b + 0x232, (nint >> 8) & 0xFF);
+    uint64_t t0 = timer_ticks();
+    ad9361_spi_write(b + 0x231, nint & 0xFF);
+    uint8_t divs = ad9361_spi_read(0x005);
+    divs = d == RF_TX ? (divs & 0x0F) | (i << 4) : (divs & 0xF0) | i;
+    ad9361_spi_write(0x005, divs);
+
+    int locked = 0, n = 0;
+    for (;; n++) {
+        uint8_t v = ad9361_spi_read(b + 0x247);
+        if (trace && n < *ntrace)
+            trace[n] = v;
+        if ((v & 0x02) && !(trace && n < *ntrace)) {
+            locked = 1;
+            break;
+        }
+        if (timer_ticks() - t0 > TIMER_US(3000))
+            break;
+        if (trace)
+            delay_us(10);
+    }
+    if (trace)
+        *ntrace = n < *ntrace ? n : *ntrace;
+    if (lock_us)
+        *lock_us = (uint32_t)((timer_ticks() - t0) / (CPU_HZ / 1000000u));
+    set(actual, actual_vcorate / vcodiv);
+    return locked || trace ? 0 : -1;
 }
 
 extern "C" int rf_get_rate(double* hz)
