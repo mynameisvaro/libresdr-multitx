@@ -165,6 +165,19 @@ The firmware has no handset input yet, so channels are set from the console.
    CC2500's FSCTRL0 fine tune, about 1.6 kHz per step). Different CC2500 crystals
    need different values.
 
+**Tested 2026-10-22 with an XM+** (FrSky X, sub 0 = D16 FCC, over the USB/IP
+tunnel): bound at the first try (red + green, then solid green), and after a
+power cycle without the bind button the LED goes from red to solid green.
+Switching our transmitter off makes it go red, and green again when it comes back,
+so the link is ours. The green LED flickers very faintly, possibly lost frames;
+not measured yet.
+
+Receivers without servo outputs (XM+, R-XSR) only give SBUS. To see the channels
+and count lost frames, flash [`tools/sbus_monitor`](../tools/sbus_monitor/sbus_monitor.ino)
+to an ESP32 and connect the receiver's SBUS output to GPIO16 (it powers the receiver
+from 5V/VIN too). It prints frames per second, frames the receiver flagged as
+lost, the failsafe flag and channels 1–8, once a second.
+
 The TX ID is fixed (`0x4D545831`, "MTX1") because the board has no non-volatile
 storage for it, so a bound receiver stays bound across reboots. `mpm id HEX`
 changes it. Output power isn't calibrated: the AD9361 attenuator is set from
