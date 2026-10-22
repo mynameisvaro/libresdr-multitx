@@ -15,5 +15,8 @@ xsim.dir/
 images/
 logs/
 
+# firmware build output
+fw/build/
+
 __pycache__/
 *.pyc

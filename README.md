@@ -107,7 +107,8 @@ Running the board on a remote machine over USB/IP: [docs/remote-usb.md](docs/rem
 - [x] Rebuild the community B220 FPGA design reproducibly (Vivado 2022.2)
 - [x] Phase 1 platform: MicroBlaze, `axi_ad9361`, USB debug bridge, RX capture
 - [x] Verified on hardware: bridge, memory, registers, AD9361 SPI (ID `0x0A`)
-- [ ] MicroBlaze firmware: start-up, console over USB, ADI AD9361 no-OS driver
+- [x] MicroBlaze firmware: start-up, console over USB ([fw/](fw))
+- [ ] ADI AD9361 no-OS driver in the firmware
 - [ ] First RF: DDS tone on TX, RX capture of a known signal
 - [ ] GFSK modem + NCO hop engine + fastlock slice switching
 - [ ] CC2500 shim → FrSky D8/D16 (first target receivers: FrSky)

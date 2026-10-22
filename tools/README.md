@@ -5,7 +5,7 @@ board running a MultiTX bitstream.
 
 | Tool | |
 |---|---|
-| [`usbdbg.py`](usbdbg.py) | USB debug bridge client: read/write the AXI bus, halt/run the CPU, load firmware, capture RX samples. Also importable (`from usbdbg import Bridge`) |
+| [`usbdbg.py`](usbdbg.py) | USB debug bridge client: read/write the AXI bus, halt/run the CPU, load firmware, capture RX samples, firmware console (`console`). Also importable (`from usbdbg import Bridge`) |
 | [`ad9361_spi.py`](ad9361_spi.py) | AD9361 register access through the AXI Quad SPI (bring-up only; the firmware will own the chip) |
 | [`selftest.py`](selftest.py) | hardware self-test: bridge, memory, registers, AD9361 SPI |
 | [`test_usbdbg_cosim.py`](test_usbdbg_cosim.py) | runs `usbdbg.py`'s packets through the RTL in xsim to check that both agree on the wire format |

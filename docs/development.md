@@ -59,6 +59,19 @@ uhd_usrp_probe --init-only --args "type=b200,fpga=/path/to/system_top.bin"
 If the board is on another machine over USB/IP, load it on that machine; see
 [remote-usb.md](remote-usb.md).
 
+## Firmware
+
+The MicroBlaze firmware lives in [`fw/`](../fw) and loads over the USB bridge, with
+no FPGA reload:
+
+```bash
+make -C fw load                              # build, load, run
+python3 tools/usbdbg.py console              # interactive console
+python3 tools/usbdbg.py console info "ad 0x37"
+```
+
+See [fw/README.md](../fw/README.md) for the memory layout and the console mailbox.
+
 ## Verify and debug
 
 ```bash
