@@ -6,7 +6,7 @@
 
 void mpm_init(void);
 void mpm_set_id(uint32_t id);
-/* proto/sub as in Multiprotocol (FrSky D = 3, FrSky X = 15). 0 ok, -1 unknown
+/* proto/sub as in Multiprotocol (FlySky = 1, FrSky D = 3, FrSky X = 15, AFHDS2A = 28). 0 ok, -1 unknown
  * protocol, -2 invalid sub-protocol. */
 int  mpm_start(int proto, int sub, int rx_num, int option, int bind);
 void mpm_stop(void);
@@ -18,5 +18,8 @@ void mpm_print_status(void);
 void mpm_list(void);
 int  mpm_proto_by_name(const char *name);   /* name or number -> protocol, -1 */
 const uint8_t *mpm_hopping_table(int *n);
+/* AFHDS2A receiver ID per RX number (big endian: first byte on air first) */
+void mpm_set_afhds2a_rxid(int rx_num, uint32_t id);
+uint32_t mpm_get_afhds2a_rxid(int rx_num);
 
 #endif

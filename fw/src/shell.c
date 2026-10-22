@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "a7105.h"
 #include "ad9361_spi.h"
 #include "axi_ad9361.h"
 #include "console.h"
@@ -26,6 +27,19 @@ static int  line_len;
 static uint32_t num(const char *s)
 {
 	return strtoul(s, NULL, 0);
+}
+
+/* "0a1B2c" -> bytes; returns the count, -1 on a bad string */
+static int hex_bytes(const char *s, uint8_t *out, int max)
+{
+	int n = 0;
+	for (; s[0] && s[1] && n < max; s += 2) {
+		char b[3] = { s[0], s[1], 0 }, *end;
+		out[n++] = strtoul(b, &end, 16);
+		if (*end)
+			return -1;
+	}
+	return *s ? -1 : n;
 }
 
 static int cmd_help(int argc, char **argv);
@@ -374,6 +388,11 @@ static int cmd_mpm(int argc, char **argv)
 		mpm_set_id(num(argv[2]));
 		return 0;
 	}
+	if (!strcmp(sub, "rxid") && argc > 2) {
+		/* mpm rxid HEX [RX]: AFHDS2A receiver ID (learned when binding) */
+		mpm_set_afhds2a_rxid(argc > 3 ? (int)num(argv[3]) : 0, strtoul(argv[2], NULL, 16));
+		return 0;
+	}
 	if (!strcmp(sub, "hops")) {
 		int n;
 		const uint8_t *h = mpm_hopping_table(&n);
@@ -395,6 +414,11 @@ static int cmd_mpm(int argc, char **argv)
 		printf("cc2500 state 0x%02x, %lu packets, %lu errors, last %.4f MHz, %.0f baud, dev %.0f Hz\n",
 		       c->marcstate, (unsigned long)c->tx_packets, (unsigned long)c->tx_errors,
 		       c->last_freq_hz / 1e6, c->baud, c->dev_hz);
+		const struct a7105_info *a = a7105_get_info();
+		printf("a7105 state 0x%02x, %lu packets, %lu errors, %lu received, last %.4f MHz, "
+		       "%.0f baud, dev %.0f Hz, %d bits\n", a->state, (unsigned long)a->tx_packets,
+		       (unsigned long)a->tx_errors, (unsigned long)a->rx_packets, a->last_freq_hz / 1e6,
+		       a->baud, a->dev_hz, a->last_bits);
 		return 0;
 	}
 	return -1;
@@ -435,6 +459,68 @@ static int cmd_cc2500(int argc, char **argv)
 	return 0;
 }
 
+static void a7105_print_coding(void)
+{
+	const struct a7105_coding *c = a7105_coding();
+	printf("crc poly %04x init %04x reflect %d xorout %04x\nfec ", c->crc_poly, c->crc_init,
+	       c->crc_reflect, c->crc_xorout);
+	for (int i = 0; i < 16; i++)
+		printf("%02x", c->fec[i]);
+	printf(" %s\n", c->fec_low_first ? "lowfirst" : "highfirst");
+}
+
+static int cmd_a7105(int argc, char **argv)
+{
+	struct a7105_coding *c = a7105_coding();
+	uint8_t b[64];
+
+	if (argc == 1) {
+		const struct a7105_info *a = a7105_get_info();
+		const uint8_t *r = a7105_regs();
+		for (int i = 0; i < 0x33; i++)
+			printf("%s%02x", i % 16 ? " " : (i ? "\n" : ""), r[i]);
+		printf("\nstate 0x%02x, %lu packets, %lu errors, %lu received\nlast payload (%d bytes):",
+		       a->state, (unsigned long)a->tx_packets, (unsigned long)a->tx_errors,
+		       (unsigned long)a->rx_packets, a->last_len);
+		for (int i = 0; i < a->last_len; i++)
+			printf(" %02x", a->last_pkt[i]);
+		printf("\n");
+		a7105_print_coding();
+		return 0;
+	}
+	if (!strcmp(argv[1], "coding")) {
+		a7105_print_coding();
+		return 0;
+	}
+	if (!strcmp(argv[1], "crc") && argc > 3) {
+		c->crc_poly = strtoul(argv[2], NULL, 16);
+		c->crc_init = strtoul(argv[3], NULL, 16);
+		c->crc_reflect = argc > 4 && num(argv[4]);
+		c->crc_xorout = argc > 5 ? strtoul(argv[5], NULL, 16) : 0;
+		return 0;
+	}
+	if (!strcmp(argv[1], "fec") && argc > 2) {
+		if (!strcmp(argv[2], "default")) {
+			a7105_coding_default();
+			return 0;
+		}
+		if (hex_bytes(argv[2], b, 16) != 16) {
+			printf("need 16 code words as 32 hex digits\n");
+			return 0;
+		}
+		memcpy(c->fec, b, 16);
+		c->fec_low_first = argc > 3 && !strcmp(argv[3], "lowfirst");
+		return 0;
+	}
+	if (!strcmp(argv[1], "rx") && argc > 2) {
+		int n = hex_bytes(argv[2], b, sizeof(b));
+		if (n <= 0 || a7105_rx_queue(b, n))
+			printf("bad packet\n");
+		return 0;
+	}
+	return -1;
+}
+
 static int cmd_reboot(int argc, char **argv)
 {
 	printf("rebooting\n");
@@ -457,9 +543,13 @@ static const struct shell_cmd cmds[] = {
 	{ "gfsk",    "SUBCMD ...",     "modulator: cfg BAUD DEV [BT] | cc2500 d8|d16 | chan HZ |\n"
 	  "                             level DBFS [RAMP_US] | cw on|off | send [-c] HEX | status", cmd_gfsk },
 	{ "mpm",     "SUBCMD ...",     "Multiprotocol: list | start PROTO [SUB [RX [OPT [bind]]]] |\n"
-	  "                             binddone | stop | ch N VALUE | id HEX | hops | status", cmd_mpm },
+	  "                             binddone | stop | ch N VALUE | id HEX | rxid HEX [RX] |\n"
+	  "                             hops | status", cmd_mpm },
 	{ "radio",   "SUBCMD ...",     "rate HZ | rxfollow 0|1 | capture (next packet)", cmd_radio },
 	{ "cc2500",  "",               "virtual CC2500 registers and last packet", cmd_cc2500 },
+	{ "a7105",   "[SUBCMD ...]",   "virtual A7105: registers, last packet | coding |\n"
+	  "                             crc POLY INIT [REFLECT [XOROUT]] | fec HEX32 [lowfirst] | fec default |\n"
+	  "                             rx HEX (queue a received packet)", cmd_a7105 },
 	{ "reboot",  "",               "restart the firmware",            cmd_reboot },
 };
 

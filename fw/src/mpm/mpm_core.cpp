@@ -11,8 +11,11 @@
 
 // ---- which radios and protocols are built in (normally _Config.h / Validate.h)
 #define CC2500_INSTALLED
+#define A7105_INSTALLED
 #define FRSKYD_CC2500_INO
 #define FRSKYX_CC2500_INO
+#define FLYSKY_A7105_INO
+#define AFHDS2A_A7105_INO
 #define AETR                    // channel order, Multiprotocol's default (_Config.h)
 
 #include "mpm_arduino.h"
@@ -89,9 +92,11 @@ uint8_t eeprom_read_byte(EE_ADDR a) { uintptr_t i = (uintptr_t)a; return i < siz
 void eeprom_write_byte(EE_ADDR a, uint8_t v) { uintptr_t i = (uintptr_t)a; if (i < sizeof(eeprom)) eeprom[i] = v; }
 
 // ---------------------------------------------------------------- SPI bus
-// One virtual chip for now; each one gets its own chip select.
-uint8_t SPI_Read(void) { return cc2500_spi(0x00); }
-void SPI_Write(uint8_t b) { cc2500_spi(b); }
+// Each virtual chip has its own chip select and ignores the bus when it isn't
+// selected (returns 0xFF), so the bytes go to both and the selected one answers.
+uint8_t SPI_Read(void) { return cc2500_spi(0x00) & a7105_spi(0x00); }
+uint8_t SPI_SDI_Read(void) { return SPI_Read(); }
+void SPI_Write(uint8_t b) { cc2500_spi(b); a7105_spi(b); }
 
 // ---------------------------------------------------------------- helpers
 // (Multiprotocol.ino)
@@ -131,9 +136,12 @@ static void __attribute__((unused)) crc8_update(uint8_t byte)
 // ---------------------------------------------------------------- protocol files
 #include "Convert.ino"
 #include "CC2500_SPI.ino"
+#include "A7105_SPI.ino"
 #include "FrSkyDVX_common.ino"
 #include "FrSkyD_cc2500.ino"
 #include "FrSkyX_cc2500.ino"
+#include "FlySky_a7105.ino"
+#include "AFHDS2A_a7105.ino"
 #include "Multi_Protos.ino"
 
 // ---------------------------------------------------------------- start-up + scheduler
@@ -148,6 +156,7 @@ static uint32_t cb_count, cb_late, cb_max_late_us;
 static void modules_reset(void)
 {
 	CC2500_Reset();
+	A7105_Reset();
 	prev_power = 0xFD;
 }
 
@@ -209,11 +218,36 @@ extern "C" void mpm_stop(void)
 {
 	remote_callback = 0;
 	CC2500_Strobe(CC2500_SIDLE);
+	A7105_Strobe(A7105_STANDBY);
 }
 
 extern "C" void mpm_bind_done(void)
 {
-	BIND_DONE;          // End_Bind() for the FrSky protocols
+	BIND_DONE;          // End_Bind() for the FrSky protocols; AFHDS2A sends its last
+	                    // bind packets (with the RX ID it has) and starts
+}
+
+// AFHDS2A keeps the receiver's ID (learned while binding) in EEPROM, per RX
+// number (AFHDS2A_init). The EEPROM is RAM here, so it can be set by hand.
+static uint16_t afhds2a_rxid_addr(int rx_num)
+{
+	return rx_num < 16 ? AFHDS2A_EEPROM_OFFSET + rx_num * 4 : AFHDS2A_EEPROM_OFFSET2 + (rx_num - 16) * 4;
+}
+
+extern "C" void mpm_set_afhds2a_rxid(int rx_num, uint32_t id)
+{
+	uint16_t a = afhds2a_rxid_addr(rx_num & 0x3F);
+	for (int i = 0; i < 4; i++)
+		eeprom_write_byte((EE_ADDR)(uintptr_t)(a + i), id >> (24 - 8 * i));
+}
+
+extern "C" uint32_t mpm_get_afhds2a_rxid(int rx_num)
+{
+	uint16_t a = afhds2a_rxid_addr(rx_num & 0x3F);
+	uint32_t id = 0;
+	for (int i = 0; i < 4; i++)
+		id = id << 8 | eeprom_read_byte((EE_ADDR)(uintptr_t)(a + i));
+	return id;
 }
 
 extern "C" int mpm_running(void)
@@ -227,6 +261,7 @@ extern "C" int mpm_running(void)
 extern "C" void mpm_poll(void)
 {
 	cc2500_poll();
+	a7105_poll();
 	if (!remote_callback)
 		return;
 	uint64_t now = timer_ticks();
@@ -265,6 +300,9 @@ extern "C" void mpm_print_status(void)
 	}
 	printf("TX ID %08lx (rx_tx_addr %02x %02x %02x %02x)\n", (unsigned long)MProtocol_id,
 	       rx_tx_addr[0], rx_tx_addr[1], rx_tx_addr[2], rx_tx_addr[3]);
+	if (protocol == PROTO_AFHDS2A)
+		printf("AFHDS2A RX ID %02x%02x%02x%02x (stored for RX %d)\n", rx_id[0], rx_id[1], rx_id[2],
+		       rx_id[3], RX_num);
 	printf("callbacks %lu, late (>100 us) %lu, worst %lu us\n", (unsigned long)cb_count,
 	       (unsigned long)cb_late, (unsigned long)cb_max_late_us);
 	printf("channels");

@@ -50,7 +50,7 @@ LDLIBS  = -Wl,--start-group -lstdc++ -lc -lm -lgcc -Wl,--end-group
 
 SRCS = src/crt0.S src/syscalls.c src/main.c src/console.c src/timer.c \
        src/gpio.c src/ad9361_spi.c src/axi_ad9361.c src/gfsk.c src/radio.c \
-       src/cc2500.c src/shell.c src/rf.cpp src/mpm/mpm_core.cpp
+       src/cc2500.c src/a7105.c src/shell.c src/rf.cpp src/mpm/mpm_core.cpp
 OBJS = $(patsubst src/%,$(BUILD)/%.o,$(SRCS)) $(BUILD)/uhd_ad9361/ad9361_device.cpp.o
 
 all: $(TARGET).bin

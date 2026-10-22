@@ -9,6 +9,7 @@
 #include <string.h>
 
 extern "C" {
+#include "a7105.h"
 #include "cc2500.h"
 #include "timer.h"
 }
@@ -57,8 +58,11 @@ void    eeprom_write_byte(EE_ADDR a, uint8_t v);
 	#define debugln(...)      do { } while (0)
 #endif
 
-// SPI and chip selects: the radio chips are virtual (fw/src/cc2500.c etc.)
+// SPI and chip selects: the radio chips are virtual (fw/src/cc2500.c, a7105.c)
 uint8_t SPI_Read(void);
+uint8_t SPI_SDI_Read(void);             // A7105 (3-wire SPI on a real module)
 void    SPI_Write(uint8_t b);
 #define CC25_CSN_on            cc2500_csn(1)
 #define CC25_CSN_off           cc2500_csn(0)
+#define A7105_CSN_on           a7105_csn(1)
+#define A7105_CSN_off          a7105_csn(0)
