@@ -14,12 +14,12 @@ front of the AD9361. ExpressLRS support is planned on the same foundation.
 ![Vivado](https://img.shields.io/badge/Vivado-2022.2-blue)
 ![FPGA](https://img.shields.io/badge/FPGA-Artix--7%20XC7A200T-orange)
 ![RF](https://img.shields.io/badge/RF-AD9361-green)
-![Status](https://img.shields.io/badge/status-phase%201%20platform-yellow)
+![Status](https://img.shields.io/badge/status-first%20RF-yellow)
 ![License](https://img.shields.io/badge/license-GPL--3.0-lightgrey)
 
-> **Status:** the FPGA platform (soft core, AD9361 interface, USB debug bridge) is
-> built and verified on hardware. Firmware, modems and protocols come next; see the
-> [roadmap](#roadmap). Nothing transmits yet.
+> **Status:** the FPGA platform, the MicroBlaze firmware and the AD9361 driver work
+> on hardware, and a test tone goes out and comes back at 2.4 GHz. Modems and
+> protocols come next; see the [roadmap](#roadmap).
 
 ## How it works
 
@@ -109,7 +109,7 @@ Running the board on a remote machine over USB/IP: [docs/remote-usb.md](docs/rem
 - [x] Verified on hardware: bridge, memory, registers, AD9361 SPI (ID `0x0A`)
 - [x] MicroBlaze firmware: start-up, console over USB ([fw/](fw))
 - [x] AD9361 driver in the firmware (UHD's, GPL-3.0), sample interface verified to 61.44 MSPS
-- [ ] First RF: DDS tone on TX, RX capture of a known signal
+- [x] First RF: DDS tone out of TX/RX, received on RX2 at 2.4 GHz ([results](docs/hardware.md#first-rf-test))
 - [ ] GFSK modem + NCO hop engine + fastlock slice switching
 - [ ] CC2500 shim → FrSky D8/D16 (first target receivers: FrSky)
 - [ ] A7105 shim → FlySky AFHDS / AFHDS2A

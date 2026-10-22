@@ -177,6 +177,32 @@ static int cmd_dds(int argc, char **argv)
 	return 0;
 }
 
+/* RF front-end words (docs/hardware.md); same bit layout on both channels */
+static const struct { const char *name; uint32_t word; } fe_states[] = {
+	{ "off",  0x48 },   /* power-up default */
+	{ "rx2",  0x4C },   /* RX from the RX2 port */
+	{ "rx",   0x1A },   /* RX from the TX/RX port */
+	{ "tx",   0xE1 },   /* TX on the TX/RX port */
+	{ "fdd",  0xE5 },   /* TX on TX/RX + RX from RX2 */
+};
+
+static int cmd_fe(int argc, char **argv)
+{
+	if (argc < 3)
+		return -1;
+	int chan = num(argv[1]);
+	if (chan < 1 || chan > 2)
+		return -1;
+	for (unsigned i = 0; i < sizeof(fe_states) / sizeof(fe_states[0]); i++) {
+		if (!strcmp(argv[2], fe_states[i].name)) {
+			gpio_fe_set(chan - 1, fe_states[i].word);
+			return 0;
+		}
+	}
+	gpio_fe_set(chan - 1, num(argv[2]));
+	return 0;
+}
+
 static int cmd_reboot(int argc, char **argv)
 {
 	printf("rebooting\n");
@@ -194,6 +220,7 @@ static const struct shell_cmd cmds[] = {
 	{ "adreset", "",               "pulse AD9361 RESETB, read the ID", cmd_adreset },
 	{ "rf",      "SUBCMD ...",     "AD9361: init | rate [HZ] | freq rx|tx [HZ] |\n"
 	  "                             gain rx|tx DB | bw rx|tx HZ | rssi | temp | loopback 0|1", cmd_rf },
+	{ "fe",      "1|2 STATE|WORD", "front end: off | rx2 | rx | tx | fdd, or a raw word", cmd_fe },
 	{ "dds",     "HZ [DBFS] | off", "TX1 test tone from the FPGA DDS (default -12 dBFS)", cmd_dds },
 	{ "reboot",  "",               "restart the firmware",            cmd_reboot },
 };

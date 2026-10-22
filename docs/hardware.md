@@ -61,23 +61,60 @@ Xilinx Platform Cable USB II clone).
 
 ## RF front end
 
+Only the AD9361's **A ports** (TX1A, RX1A, TX2A, RX2A) have baluns on the B220
+mini; the B and C port pins are not connected. A real B210 switches between ports
+A, B and C by frequency, so UHD's B210 band edges would select dead ports below
+4 GHz. The firmware uses port A at every frequency, as UHD does for the B205mini.
+
 Each channel has an 8-bit control word, in the same layout as UHD's ATR registers:
 
 | bit | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
 |---|---|---|---|---|---|---|---|---|
 | signal | TX_ENABLE | SFDX_RX | SFDX_TX | SRX_RX | SRX_TX | LED_RX | LED_TXRX_RX | LED_TXRX_TX |
 
-| State (channel 1) | Word | Meaning |
-|---|---|---|
-| off | `0x48` | power-up default |
-| RX on RX2 port | `0x4C` | |
-| RX on TX/RX port | `0x1A` | |
-| TX on TX/RX port | `0xE1` | |
-| full duplex | `0xE5` | TX on TX/RX + RX on RX2: the mode MultiTX uses |
+| State | Word | Meaning | firmware |
+|---|---|---|---|
+| off | `0x48` | power-up default | `fe 1 off` |
+| RX on RX2 port | `0x4C` | | `fe 1 rx2` |
+| RX on TX/RX port | `0x1A` | | `fe 1 rx` |
+| TX on TX/RX port | `0xE1` | | `fe 1 tx` |
+| full duplex | `0xE5` | TX on TX/RX + RX on RX2: the mode MultiTX uses | `fe 1 fdd` |
+
+- **AD9361 chain 1 (TX1A/RX1A) is wired to front-end word 1** (`gpio_fe` channel
+  1, the `SFDX1`/`SRX1`/`tx_enable1` pins). That is the B205mini arrangement; UHD
+  swaps the words on a B210 (`swap_atr`). Measured: front-end word 2 has no effect
+  on chain 1.
+- **The TX amplifier takes about 450 ms to reach full output after TX_ENABLE**:
+  the switch adds ~6 dB at once, then nothing happens for ~270 ms, then the output
+  rises another ~18 dB and settles by ~450 ms. Switching off is immediate. So
+  TX_ENABLE must stay on while transmitting, and packets are gated digitally (see
+  [design-notes.md](design-notes.md)).
 
 Output power straight from the AD9361 is about +5 dBm at 2.4 GHz. Commercial RC
 modules run 20–30 dBm, so useful range needs an external PA/LNA. CN2's GPIOs can
 drive its T/R switch.
+
+### First RF test
+
+`tools/rf_tone.py` sends a DDS tone out of TX/RX and receives it on RX2 through a
+cable with a 30 dB attenuator. TX LO 2440 MHz, tone +1 MHz, RX LO 2438 MHz, TX gain
+60 dB, RX gain 40 dB, 30.72 MSPS:
+
+![spectrum](img/rf_tone_2441MHz.png)
+
+| | 2410 MHz | 2440 MHz | 2475 MHz |
+|---|---|---|---|
+| tone | −28.5 dBFS | −29.0 dBFS | −29.6 dBFS |
+| TX LO leakage | −35 dBc | −35 dBc | −36 dBc |
+| TX sideband image | −48 dBc | −47 dBc | −48 dBc |
+| RX DC | −53 dBc | −54 dBc | −50 dBc |
+| RX image | −65 dBc | −67 dBc | −66 dBc |
+
+The RX image is only that low with the AD9361's RX I/Q tracking on (register
+`0x169` = `0xCF`). Calibrations switch it off, so the firmware turns it back on
+after every init, rate change and retune; without it the image is about −28 dBc.
+There are unexplained spurs at −5 MHz (−42 dBc) and ±8 MHz (about −50 dBc) in the
+plot, still to be investigated.
 
 ## LEDs
 

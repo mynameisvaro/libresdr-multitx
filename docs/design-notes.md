@@ -66,6 +66,10 @@ by gating the digital samples. That gives a near-instant TX→RX turnaround for
 telemetry and NRF24 auto-ack. The board has separate TX/RX and RX2 ports (UHD's
 "full duplex" switch state, `0xE5`).
 
+The B220 mini's TX amplifier makes this a requirement: it needs about 450 ms after
+TX_ENABLE to reach full output (see [hardware.md](hardware.md#rf-front-end)), far
+longer than an RC packet interval.
+
 ## ExpressLRS
 
 ExpressLRS is a separate codebase (PlatformIO, C++). The same approach applies, but

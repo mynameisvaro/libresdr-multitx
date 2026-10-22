@@ -33,18 +33,16 @@ public:
     void poke8(uint32_t reg, uint8_t val) override { ad9361_spi_write(reg, val); }
 };
 
-// Board description: the B220 mini is wired like a B210 (UHD's b200_ad9361_client_t).
+// Board description. The data port and clocking are wired like a B210 (UHD's
+// b200_ad9361_client_t), but only the AD9361's A ports have baluns on the B220
+// mini, so every band edge is 0 and port A is used at all frequencies (as UHD
+// does for the B205mini).
 class b220_params : public uhd::usrp::ad9361_params
 {
 public:
-    double get_band_edge(uhd::usrp::frequency_band_t band) override
+    double get_band_edge(uhd::usrp::frequency_band_t) override
     {
-        switch (band) {
-            case uhd::usrp::AD9361_RX_BAND0: return 2.2e9;   // below: RX port C
-            case uhd::usrp::AD9361_RX_BAND1: return 4.0e9;   // below: RX port B, above: A
-            case uhd::usrp::AD9361_TX_BAND0: return 2.5e9;   // below: TX port B, above: A
-            default:                         return 0;
-        }
+        return 0;
     }
     uhd::usrp::clocking_mode_t get_clocking_mode() override
     {
@@ -89,6 +87,14 @@ template <typename F> int guarded(const char* what, F f)
     }
 }
 
+// Calibrations (rate changes, TX quadrature, big retunes) switch the RX DC and
+// I/Q tracking off; UHD's ad936x_manager turns them back on, so do the same.
+void rx_tracking_on()
+{
+    dev->set_dc_offset_auto(ad9361_device_t::RX, true);
+    dev->set_iq_balance_auto(ad9361_device_t::RX, true);
+}
+
 void set(double* out, double v)
 {
     if (out)
@@ -106,6 +112,7 @@ extern "C" int rf_init(void)
         dev->initialize();
         dev->set_clock_rate(30.72e6);
         dev->set_active_chains(true, false, true, false);
+        rx_tracking_on();
     });
     if (ret) {
         delete dev;
@@ -126,6 +133,7 @@ extern "C" int rf_set_rate(double hz, double* actual)
     return guarded("rate", [=] {
         set(actual, dev->set_clock_rate(hz));
         dev->set_active_chains(true, false, true, false);
+        rx_tracking_on();
     });
 }
 
@@ -136,7 +144,10 @@ extern "C" int rf_get_rate(double* hz)
 
 extern "C" int rf_tune(rf_dir dir, double hz, double* actual)
 {
-    return guarded("tune", [=] { set(actual, dev->tune(to_dir(dir), hz)); });
+    return guarded("tune", [=] {
+        set(actual, dev->tune(to_dir(dir), hz));
+        rx_tracking_on();
+    });
 }
 
 extern "C" int rf_get_freq(rf_dir dir, double* hz)
