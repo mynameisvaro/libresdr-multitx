@@ -1,0 +1,16 @@
+// -*- C++ -*-  <mutex> plus a no-op std::recursive_mutex for the single-threaded
+// MicroBlaze firmware (the bare-metal libstdc++ has no gthreads).
+#pragma once
+#include_next <mutex>
+
+#ifndef _GLIBCXX_HAS_GTHREADS
+namespace std {
+class recursive_mutex
+{
+public:
+    void lock() {}
+    bool try_lock() { return true; }
+    void unlock() {}
+};
+} // namespace std
+#endif

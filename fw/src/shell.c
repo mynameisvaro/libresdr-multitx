@@ -3,9 +3,11 @@
 #include <string.h>
 
 #include "ad9361_spi.h"
+#include "axi_ad9361.h"
 #include "console.h"
 #include "gpio.h"
 #include "hw.h"
+#include "rf.h"
 #include "shell.h"
 #include "timer.h"
 #include "version.h"
@@ -31,7 +33,7 @@ static int cmd_info(int argc, char **argv)
 	printf("MultiTX firmware %s, built %s\n", FW_VERSION, FW_BUILD_DATE);
 	printf("uptime   %lu ms\n", (unsigned long)timer_ms());
 	printf("code     %lu bytes of 252 KB\n", (unsigned long)_code_end);
-	printf("heap     %lu bytes free at 0x%08lx\n",
+	printf("heap     %lu bytes at 0x%08lx\n",
 	       (unsigned long)(_heap_end - _heap_start), (unsigned long)_heap_start);
 	printf("console  session 0x%08lx, %lu bytes dropped\n",
 	       (unsigned long)mailbox.session, (unsigned long)mailbox.tx_dropped);
@@ -90,6 +92,91 @@ static int cmd_adreset(int argc, char **argv)
 	return 0;
 }
 
+static int rf_dir_arg(const char *s, enum rf_dir *dir)
+{
+	if (!strcmp(s, "rx"))
+		*dir = RF_RX;
+	else if (!strcmp(s, "tx"))
+		*dir = RF_TX;
+	else
+		return -1;
+	return 0;
+}
+
+static int cmd_rf(int argc, char **argv)
+{
+	enum rf_dir dir;
+	double v;
+
+	if (argc < 2)
+		return -1;
+	const char *sub = argv[1];
+
+	if (!strcmp(sub, "init")) {
+		uint32_t t0 = timer_ms();
+		if (rf_init())
+			return 0;
+		printf("AD9361 initialised in %lu ms\n", (unsigned long)(timer_ms() - t0));
+		return 0;
+	}
+	if (!strcmp(sub, "rate")) {
+		int ret = argc > 2 ? rf_set_rate(strtod(argv[2], NULL), &v) : rf_get_rate(&v);
+		if (!ret)
+			printf("rate %.0f Hz (FPGA measures %.3f MHz)\n", v, axi_ad9361_clk_hz() / 1e6);
+		return 0;
+	}
+	if (!strcmp(sub, "freq") && argc > 2 && !rf_dir_arg(argv[2], &dir)) {
+		int ret = argc > 3 ? rf_tune(dir, strtod(argv[3], NULL), &v) : rf_get_freq(dir, &v);
+		if (!ret)
+			printf("%s LO %.0f Hz\n", argv[2], v);
+		return 0;
+	}
+	if (!strcmp(sub, "gain") && argc > 3 && !rf_dir_arg(argv[2], &dir)) {
+		if (!rf_set_gain(dir, strtod(argv[3], NULL), &v))
+			printf("%s gain %.2f dB\n", argv[2], v);
+		return 0;
+	}
+	if (!strcmp(sub, "bw") && argc > 3 && !rf_dir_arg(argv[2], &dir)) {
+		if (!rf_set_bw(dir, strtod(argv[3], NULL), &v))
+			printf("%s bandwidth %.0f Hz\n", argv[2], v);
+		return 0;
+	}
+	if (!strcmp(sub, "rssi")) {
+		if (!rf_rssi(&v))
+			printf("RSSI %.2f dB\n", v);
+		return 0;
+	}
+	if (!strcmp(sub, "temp")) {
+		if (!rf_temperature(&v))
+			printf("temperature %.1f C\n", v);
+		return 0;
+	}
+	if (!strcmp(sub, "loopback") && argc > 2) {
+		rf_loopback(num(argv[2]) != 0);
+		return 0;
+	}
+	return -1;
+}
+
+static int cmd_dds(int argc, char **argv)
+{
+	double rate;
+
+	if (argc < 2)
+		return -1;
+	if (!strcmp(argv[1], "off")) {
+		axi_ad9361_dds_off();
+		return 0;
+	}
+	if (rf_get_rate(&rate))
+		return 0;
+	double tone = strtod(argv[1], NULL);
+	double dbfs = argc > 2 ? strtod(argv[2], NULL) : -12.0;
+	axi_ad9361_dds(rate, tone, dbfs);
+	printf("DDS %.0f Hz at %.1f dBFS (sample rate %.0f Hz)\n", tone, dbfs, rate);
+	return 0;
+}
+
 static int cmd_reboot(int argc, char **argv)
 {
 	printf("rebooting\n");
@@ -105,13 +192,16 @@ static const struct shell_cmd cmds[] = {
 	{ "mw",      "ADDR VALUE...",  "write 32-bit words",              cmd_mw },
 	{ "ad",      "REG [VALUE]",    "AD9361 register read / write",    cmd_ad },
 	{ "adreset", "",               "pulse AD9361 RESETB, read the ID", cmd_adreset },
+	{ "rf",      "SUBCMD ...",     "AD9361: init | rate [HZ] | freq rx|tx [HZ] |\n"
+	  "                             gain rx|tx DB | bw rx|tx HZ | rssi | temp | loopback 0|1", cmd_rf },
+	{ "dds",     "HZ [DBFS] | off", "TX1 test tone from the FPGA DDS (default -12 dBFS)", cmd_dds },
 	{ "reboot",  "",               "restart the firmware",            cmd_reboot },
 };
 
 static int cmd_help(int argc, char **argv)
 {
 	for (unsigned i = 0; i < sizeof(cmds) / sizeof(cmds[0]); i++)
-		printf("  %-8s %-14s %s\n", cmds[i].name, cmds[i].args, cmds[i].help);
+		printf("  %-8s %-16s %s\n", cmds[i].name, cmds[i].args, cmds[i].help);
 	return 0;
 }
 

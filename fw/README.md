@@ -2,7 +2,8 @@
 
 MicroBlaze firmware for the MultiTX platform. Plain Makefile, MicroBlaze GCC from
 Vitis 2022.2 and newlib, with no Xilinx BSP. The start-up code, linker script and
-drivers are all here.
+drivers are all here. The AD9361 is driven by UHD's own AD9361 driver (C++,
+[`third_party/uhd_ad9361`](third_party/uhd_ad9361)), set up as a B210.
 
 ```bash
 make            # build/multitx_fw.elf, .bin, .map
@@ -10,6 +11,20 @@ make load       # halt the CPU, load code_ram over the USB bridge, verify, run
 make console    # interactive console (Ctrl-C to leave)
 python3 ../tools/usbdbg.py console info "ad 0x37"   # run commands from a script
 ```
+
+A typical session:
+
+```
+mtx> rf init                  # AD9361 reset, calibrations, 30.72 MSPS, RX1 + TX1 on
+mtx> rf freq tx 2440e6
+mtx> rf gain tx 40
+mtx> dds 1e6 -12              # 1 MHz complex tone from the FPGA DDS into TX1
+mtx> rf temp
+mtx> dds off
+```
+
+`python3 ../tools/rf_loopback.py` checks the FPGA ↔ AD9361 sample interface at
+several rates using the AD9361's digital loopback (no RF).
 
 The FPGA must be running a MultiTX bitstream (see [docs/development.md](../docs/development.md)).
 Loading takes well under a second on a direct USB connection, so there's no need to
@@ -50,8 +65,28 @@ The session counter changes at every boot, which lets the host notice a reload.
 | [`timer.c`](src/timer.c) | 64-bit time base from `sys_timer` (cascade mode), delays |
 | [`gpio.c`](src/gpio.c) | `gpio_ctrl` (AD9361 control lines, LED) and `gpio_fe` |
 | [`ad9361_spi.c`](src/ad9361_spi.c) | AD9361 SPI through the AXI Quad SPI, hardware reset |
+| [`rf.cpp`](src/rf.cpp) | B220 glue for UHD's AD9361 driver (board parameters, SPI access) behind a C API, [`rf.h`](src/rf.h) |
+| [`axi_ad9361.c`](src/axi_ad9361.c) | FPGA side of the data port: ADI core set-up (1R1T, inverted FB_CLK) and its DDS |
+| [`uhd_shim/`](src/uhd_shim) | stand-ins for the UHD/Boost headers the driver includes |
 | [`hw.h`](src/hw.h) | address map and register access helpers |
 
 The compiler flags in the [`Makefile`](Makefile) must match the MicroBlaze
 configuration in `hw/multitx/system_bd.tcl` (barrel shifter, hardware multiply and
 divide, pattern compare, little endian).
+
+## C++
+
+Only the AD9361 driver is C++. It keeps its exceptions; `rf.cpp` catches them and
+returns -1 after printing the message. That needs `crti.o`/`crtbegin.o` and
+`crtend.o`/`crtn.o` around the objects (they register the unwind tables from
+`.init`), and `_cstart` calls `__libc_init_array()`. The link uses `--no-relax`:
+MicroBlaze linker relaxation shortens branches without fixing `.eh_frame`, and a
+throw then hangs in the unwinder. RTTI is off. Two things keep
+libstdc++ small: the exception shim stores its message in a fixed buffer, so no
+`std::string`, and `rf.cpp` replaces the verbose terminate handler, so the
+demangler is never linked.
+
+Code size today is about 189 KB text plus 11 KB initialised data, of the 252 KB
+in `code_ram`. Most of it is the driver (~45 KB), soft-float double maths, printf
+and the C++ unwinder. If protocol code later needs more room, `code_ram` can grow
+in the block design: the XC7A200T has plenty of block RAM left.

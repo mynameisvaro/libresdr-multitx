@@ -32,9 +32,36 @@ SECTIONS
 		*(.text .text.*)
 	} > code
 
+	/* C runtime start-up (crti/crtbegin/crtend/crtn) and C++ constructors */
+	.init : { KEEP(*(.init)) } > code
+	PROVIDE(_init = __init);   /* newlib's __libc_init_array calls _init */
+	.fini : { KEEP(*(.fini)) } > code
+	.ctors : {
+		KEEP(*crtbegin.o(.ctors))
+		KEEP(*(EXCLUDE_FILE(*crtend.o) .ctors))
+		KEEP(*(SORT(.ctors.*)))
+		KEEP(*(.ctors))
+	} > code
+	.dtors : {
+		KEEP(*crtbegin.o(.dtors))
+		KEEP(*(EXCLUDE_FILE(*crtend.o) .dtors))
+		KEEP(*(SORT(.dtors.*)))
+		KEEP(*(.dtors))
+	} > code
+	.init_array : {
+		PROVIDE_HIDDEN(__init_array_start = .);
+		KEEP(*(SORT(.init_array.*)))
+		KEEP(*(.init_array))
+		PROVIDE_HIDDEN(__init_array_end = .);
+	} > code
+
 	.rodata : ALIGN(4) {
 		*(.rodata .rodata.*)
 	} > code
+
+	/* C++ exception unwinding tables */
+	.eh_frame : { KEEP(*(.eh_frame)) } > code
+	.gcc_except_table : { *(.gcc_except_table .gcc_except_table.*) } > code
 
 	.sdata2 : ALIGN(4) {
 		_SDA2_BASE_ = . + 0x8000;

@@ -3,14 +3,17 @@
 #include <stdint.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 
 #include "console.h"
+#include "timer.h"
 
 extern uint32_t _data_load[], _data_start[], _data_end[];
 extern uint32_t _bss_start[], _bss_end[];
 extern char _heap_start[], _heap_end[];
 
 int main(void);
+void __libc_init_array(void);
 
 /* Called from crt0 with only the stack set up: no globals before the copy. */
 void _cstart(void)
@@ -21,6 +24,8 @@ void _cstart(void)
 		*dst++ = *src++;
 	for (dst = _bss_start; dst < _bss_end; dst++)
 		*dst = 0;
+	/* .init (crtbegin registers the C++ exception tables) and constructors */
+	__libc_init_array();
 	main();
 	for (;;)
 		;
@@ -63,6 +68,29 @@ int fstat(int fd, struct stat *st)
 	(void)fd;
 	memset(st, 0, sizeof(*st));
 	st->st_mode = S_IFCHR;
+	return 0;
+}
+
+/* for libstdc++'s std::chrono clocks and std::this_thread::sleep_for */
+int gettimeofday(struct timeval *tv, void *tz)
+{
+	uint64_t us = timer_ticks() / (CPU_HZ / 1000000u);
+
+	(void)tz;
+	tv->tv_sec = us / 1000000u;
+	tv->tv_usec = us % 1000000u;
+	return 0;
+}
+
+int usleep(unsigned long us)
+{
+	delay_us(us);
+	return 0;
+}
+
+unsigned sleep(unsigned s)
+{
+	delay_ms(1000u * s);
 	return 0;
 }
 

@@ -47,6 +47,13 @@ Xilinx Platform Cable USB II clone).
 - Data: **CMOS DDR, dual port**. P0 = RX (`CAT_P0_D[11:0]`, `CAT_RX_FR_P`,
   `CAT_DCLK_P`), P1 = TX (`CAT_P1_D[11:0]`, `CAT_TX_FR_P`, `CAT_FBCLK_P`). DATA_CLK is
   at most 61.44 MHz.
+- With ADI's `axi_ad9361` core, **FB_CLK must be inverted** (DAC common register
+  `0x60` = 1, done by the firmware). The core sends Q with TX_FRAME low on FB_CLK's
+  rising edge and I with TX_FRAME high on the falling edge. The AD9361, set up as
+  UHD does for a B210, expects I on the rising edge, as Ettus' FPGA sends it.
+  Without the inversion, the AD9361 receives nothing (its digital loopback returns
+  zeros). RX needs no change, and UHD's interface delays (`0x006`/`0x007` = `0x0F`)
+  work up to 61.44 MSPS.
 - Control: SPI (`CAT_SPI_EN/CLK/DI/DO`, mode 1), `RESETn`, `EN`, `TXnRX`, `EN_AGC`,
   `SYNC`, `CTRL_IN[3:0]`, `CTRL_OUT[7:0]`.
 - I/O banks for the AD9361 and the FX3 are 1.8 V. LEDs, RF switches, UART and GPIO are

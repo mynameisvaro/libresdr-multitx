@@ -108,7 +108,7 @@ Running the board on a remote machine over USB/IP: [docs/remote-usb.md](docs/rem
 - [x] Phase 1 platform: MicroBlaze, `axi_ad9361`, USB debug bridge, RX capture
 - [x] Verified on hardware: bridge, memory, registers, AD9361 SPI (ID `0x0A`)
 - [x] MicroBlaze firmware: start-up, console over USB ([fw/](fw))
-- [ ] ADI AD9361 no-OS driver in the firmware
+- [x] AD9361 driver in the firmware (UHD's, GPL-3.0), sample interface verified to 61.44 MSPS
 - [ ] First RF: DDS tone on TX, RX capture of a known signal
 - [ ] GFSK modem + NCO hop engine + fastlock slice switching
 - [ ] CC2500 shim → FrSky D8/D16 (first target receivers: FrSky)

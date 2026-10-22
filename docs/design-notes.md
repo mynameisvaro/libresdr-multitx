@@ -27,6 +27,20 @@ expects. The protocol files stay unmodified, so upstream updates can be merged.
 Sending is the easy half. Telemetry, bind replies and auto-ack need the receive path,
 which roughly doubles the work, so TX-only protocols come first.
 
+## AD9361 driver: UHD's, not no-OS
+
+ADI's no-OS AD9361 driver is the usual choice on a MicroBlaze, but its licence
+(ADI's BSD variant) adds the condition that the software "must be run on or
+directly connected to an Analog Devices Inc. component". GPL-3.0 doesn't allow
+extra conditions on a combined binary, and Multiprotocol is GPL-3.0. So the
+firmware uses UHD's AD9361 driver instead (GPL-3.0-or-later). It is also the
+driver this board's UHD images were built and tested with, so its B210 settings
+apply directly.
+
+What it lacks is no-OS's fastlock API. Fastlock store/recall is a set of
+documented register writes (UG-570), and it will be added next to the driver
+when the hop engine needs it.
+
 ## Frequency hopping: coarse LO + fine NCO
 
 Storing a fastlock profile per channel and loading one from FPGA memory on every hop
