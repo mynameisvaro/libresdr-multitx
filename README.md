@@ -14,13 +14,18 @@ front of the AD9361. ExpressLRS support is planned on the same foundation.
 ![Vivado](https://img.shields.io/badge/Vivado-2022.2-blue)
 ![FPGA](https://img.shields.io/badge/FPGA-Artix--7%20XC7A200T-orange)
 ![RF](https://img.shields.io/badge/RF-AD9361-green)
-![Status](https://img.shields.io/badge/status-FrSky%20D8%2FD16-yellow)
+![Status](https://img.shields.io/badge/status-FrSky%20D16%20flying%20a%20real%20receiver-yellowgreen)
 ![License](https://img.shields.io/badge/license-GPL--3.0-lightgrey)
 
-> **Status:** the FPGA platform, the MicroBlaze firmware and the AD9361 driver work
-> on hardware. Multiprotocol's own FrSky D8/D16 code runs on a virtual CC2500 and
-> its hopping packets decode correctly off the air; testing with a real receiver
-> is next. See the [roadmap](#roadmap).
+> **Status:** Multiprotocol's own FrSky D16 code, running unmodified on a virtual
+> CC2500, binds a real FrSky XM+ receiver and drives its channels exactly, with
+> 0.74% frames lost at 1 m. FlySky (AFHDS/AFHDS2A) runs on a virtual A7105 and is
+> waiting for its on-air coding to be learned from a real handset. See the
+> [roadmap](#roadmap).
+>
+> **New to FPGAs, or curious how a project like this is approached?** Read
+> [the journey](docs/journey/README.md): the whole project, step by step, with the
+> reasoning, the problems and how each block works.
 
 ## How it works
 
@@ -69,9 +74,10 @@ Board details, pinout notes and RF switch states: [docs/hardware.md](docs/hardwa
 | Path | Contents |
 |---|---|
 | [`hw/multitx/`](hw/multitx) | Vivado 2022.2 block design of the MultiTX platform |
-| [`hw/ip/`](hw/ip) | RTL blocks: USB debug bridge, ADC capture, TCXO DAC |
+| [`hw/ip/`](hw/ip) | RTL blocks: USB debug bridge, ADC capture, GFSK modulator, TCXO DAC |
 | [`hw/ref_b220/`](hw/ref_b220) | the community reference design, rebuilt in Vivado 2022.2 as a baseline |
-| [`tools/`](tools) | host tools: `usbdbg.py`, `ad9361_spi.py`, `selftest.py` |
+| [`fw/`](fw) | MicroBlaze firmware: AD9361 driver, virtual CC2500/A7105, Multiprotocol port |
+| [`tools/`](tools) | host tools: `usbdbg.py`, self-test, RF and protocol checkers, ESP32 SBUS monitor |
 | [`remote_usb/`](remote_usb) | USB/IP setup for a board attached to a different machine |
 | [`docs/`](docs) | architecture, hardware, development workflow, design notes |
 | [`reference/`](reference) | submodule: [f4tnk/LibreSDR_UHD_B220_Mini_FPGA](https://github.com/f4tnk/LibreSDR_UHD_B220_Mini_FPGA) at v20e |
@@ -97,6 +103,7 @@ Running the board on a remote machine over USB/IP: [docs/remote-usb.md](docs/rem
 
 | Document | |
 |---|---|
+| [journey/](docs/journey/README.md) | **the project told step by step**: how it was approached, what went wrong, how each block works (start here to learn) |
 | [architecture.md](docs/architecture.md) | block design, address map, register bits, USB bridge protocol |
 | [hardware.md](docs/hardware.md) | the B220 mini: FPGA configuration, connectors, RF switches, clocks |
 | [development.md](docs/development.md) | building, simulating, loading, verifying |
@@ -115,11 +122,11 @@ Running the board on a remote machine over USB/IP: [docs/remote-usb.md](docs/rem
 - [x] GFSK/FSK TX modem with channel NCO (`gfsk_tx`), FrSky D8/D16 packets decoded over the air
 - [x] LO slice switching (fast synthesizer retune, ~0.3 ms; fastlock not needed so far)
 - [x] Virtual CC2500 + Multiprotocol's FrSky D8/D16 code, packets verified off the air ([docs/multiprotocol.md](docs/multiprotocol.md))
-- [ ] Bind and fly with a real FrSky receiver
+- [x] Bind a real FrSky receiver (XM+, D16): exact channels via SBUS, 0.74% frames lost ([results](docs/multiprotocol.md#testing-with-a-frsky-receiver))
+- [x] A7105 shim → FlySky AFHDS / AFHDS2A, verified off the air
+- [ ] FlySky with a real handset (learn the A7105 coding) and receivers
 - [ ] Handset input (Multiprotocol serial protocol from EdgeTX/OpenTX)
 - [ ] GFSK receive path (telemetry, bind replies)
-- [ ] A7105 shim → FlySky AFHDS / AFHDS2A
-- [ ] Telemetry / receive path, bind
 - [ ] NRF24L01, CYRF6936 (DSSS), SX1276 (LoRa) shims
 - [ ] ExpressLRS (LoRa first, FLRC later)
 - [ ] Stand-alone boot (the board has no FPGA flash; needs a small boot host)
