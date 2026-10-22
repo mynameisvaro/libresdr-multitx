@@ -25,7 +25,7 @@ AFHDS2A on 13 and 140, AFHDS on 1). Packets of more than one type (bind and
 normal) make the FEC solution unique, so let it run through a bind and back to
 normal if it can. Move the sticks while it captures: the CRC needs packets
 that differ (AFHDS bind packets are all the same otherwise). At the end it prints the firmware commands that set the
-coding; nothing is changed on the board.
+coding (--apply sets it on the board).
 """
 
 import argparse
@@ -232,6 +232,7 @@ def main(argv):
     ap.add_argument("--rx-gain", type=float, default=40)
     ap.add_argument("--save", help="save the bursts (.npz) to solve again later")
     ap.add_argument("--load", nargs="+", help="solve from saved bursts (one or more files) instead of capturing")
+    ap.add_argument("--apply", action="store_true", help="set the coding found on the board")
     ap.add_argument("--any-id", action="store_true", help="don't assume the FlySky ID code")
     ap.add_argument("--keep-tx", action="store_true",
                     help="self-test: leave the board's own protocol running")
@@ -282,7 +283,14 @@ def main(argv):
         print("  " + " ".join(f"{b:02x}" for b in p))
     if len(results) > 1:
         print(f"\n{len(results)} codings fit; with more packet types there would be fewer")
-    print("\nset it in the firmware with:")
+    if args.apply and len(results) == 1:
+        from usbdbg import Bridge, Console
+        con = Console(Bridge())
+        for cmd in c.console_cmds():
+            con.run(cmd)
+        print("\nset on the board (until the firmware is reloaded):")
+    else:
+        print("\nset it in the firmware with:")
     for cmd in c.console_cmds():
         print(f"  {cmd}")
     return 0
