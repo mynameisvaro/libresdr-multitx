@@ -12,6 +12,10 @@ board running a MultiTX bitstream.
 | [`gfsk_test.py`](gfsk_test.py) | sends FrSky D8/D16-style packets through `gfsk_tx` and demodulates them (digital loopback or RF) |
 | [`gfsk.py`](gfsk.py) | GFSK helpers: pulse table, phase increments, CC2500 maths, demodulator; also writes `gfsk_tx`'s sin/cos ROM |
 | [`frsky_check.py`](frsky_check.py) | runs Multiprotocol's FrSky D8/D16 on the board and decodes captured packets like a CC2500 (CRC, hop channel, offset) |
+| [`a7105.py`](a7105.py) | A7105 packet coding (CRC-16, (7,4) FEC) and demodulator, shared by the FlySky tools |
+| [`flysky_check.py`](flysky_check.py) | the same for FlySky (AFHDS) and AFHDS2A on the virtual A7105 |
+| [`a7105_sniff.py`](a7105_sniff.py) | learns the A7105's CRC and FEC coding from a real FlySky handset; `--apply` sets it on the board |
+| [`afhds2a_bind.py`](afhds2a_bind.py) | binds an AFHDS2A receiver: catches its reply on RX2 and passes it to the virtual A7105 |
 | [`selftest.py`](selftest.py) | hardware self-test: bridge, memory, registers, AD9361 SPI |
 | [`test_usbdbg_cosim.py`](test_usbdbg_cosim.py) | runs `usbdbg.py`'s packets through the RTL in xsim to check that both agree on the wire format |
 

@@ -1,14 +1,17 @@
 # Multiprotocol on MultiTX
 
 The firmware runs [DIY Multiprotocol](https://github.com/pascallanger/DIY-Multiprotocol-TX-Module)'s
-protocol code unmodified, against virtual radio chips. So far that's the FrSky D8 and
-FrSky X (D16) protocols on a virtual CC2500.
+protocol code unmodified, against virtual radio chips. So far that's FrSky D8 and
+FrSky X (D16) on a virtual CC2500, and FlySky (AFHDS) and AFHDS2A on a virtual A7105.
 
 ```mermaid
 flowchart LR
   proto["FrSkyD_cc2500.ino<br/>FrSkyX_cc2500.ino<br/>(upstream, unmodified)"] --> spi["CC2500_SPI.ino<br/>(upstream)"]
   spi -->|"SPI_Write / SPI_Read<br/>CC25_CSN"| vchip["virtual CC2500<br/>fw/src/cc2500.c"]
   vchip -->|"packet bits, RF freq,<br/>modem, power"| radio["radio layer<br/>fw/src/radio.c"]
+  fproto["FlySky_a7105.ino<br/>AFHDS2A_a7105.ino<br/>(upstream, unmodified)"] --> aspi["A7105_SPI.ino<br/>(upstream)"]
+  aspi -->|"SPI_Write / SPI_Read<br/>A7105_CSN"| achip["virtual A7105<br/>fw/src/a7105.c"]
+  achip --> radio
   radio -->|"LO slice (fast retune)"| ad["AD9361"]
   radio -->|"NCO offset, bits"| gt["gfsk_tx (FPGA)"]
   core["mpm_core.cpp<br/>globals, start-up, scheduler"] --> proto
@@ -22,6 +25,7 @@ flowchart LR
 | Arduino shim | [`fw/src/mpm/mpm_arduino.h`](../fw/src/mpm/mpm_arduino.h) | `millis`/`micros`/delays, `PROGMEM`, `random`, EEPROM in RAM, `SPI_Write`/`SPI_Read`, chip selects |
 | Core | [`fw/src/mpm/mpm_core.cpp`](../fw/src/mpm/mpm_core.cpp) | one translation unit that `#include`s the protocol files; replaces `Multiprotocol.ino` (globals, protocol start-up, ID helpers, a µs scheduler) |
 | Virtual CC2500 | [`fw/src/cc2500.c`](../fw/src/cc2500.c) | byte-level SPI slave: registers, strobes, status registers, PATABLE, TX FIFO; builds the on-air packet on `STX` |
+| Virtual A7105 | [`fw/src/a7105.c`](../fw/src/a7105.c) | the same for the A7105: strobes, registers, FIFO and ID access; builds the packet on the TX strobe; an RX FIFO filled from the console |
 | Radio layer | [`fw/src/radio.c`](../fw/src/radio.c) | LO slices, NCO offset, modem cache, power, front end |
 
 `Multiprotocol.ino` isn't compiled because it is tied to AVR/STM32 timers, USARTs
@@ -43,6 +47,39 @@ What the chip would do on `STX`, the virtual one does too:
   - OOK, Manchester coding and FEC.
   - Calibration: `SCAL` is accepted, because the AD9361 driver calibrates the real synthesizer.
 - **GFSK pulse shape:** BT = 1 is assumed (the data sheet doesn't give it).
+
+### Virtual A7105
+
+Both chips share the SPI bus, each with its own chip select, as on a
+Multiprotocol module. On the TX strobe the virtual A7105:
+
+- **Builds the packet:** preamble (1–4 bytes), ID code (2 or 4 bytes), payload
+  (FEP + 1 bytes), CRC-16, (7,4) Hamming FEC and PN7 whitening, as enabled in
+  code register I (1Fh).
+- **Takes the RF settings from the registers:** frequency from the LO base,
+  channel number and channel step; data rate from the clock and data rate
+  registers; deviation from TX I/II; Gaussian filter BT 0.7; power from TX test
+  (28h), mapped with Multiprotocol's power table.
+- **Doesn't emulate the receiver.** In RX the chip waits until a packet is
+  queued from the console (`a7105 rx HEX`); it then lands in the RX FIFO with a
+  good CRC. `tools/afhds2a_bind.py` uses this to pass a receiver's bind reply in.
+
+**One unknown: the coding.** The A7105 data sheet (v1.4) doesn't give the CRC-16
+initial value or reflection, nor the bit layout of the Hamming code words.
+AFHDS2A uses both, AFHDS the CRC. So they are settable and, until learned from a
+real FlySky transmitter, default to a guess: CRC-16/CCITT-FALSE (0x1021, init
+0xFFFF) and the textbook Hamming(7,4) layout.
+
+```
+a7105 coding                         # show the current coding
+a7105 crc POLY INIT [REFLECT [XOROUT]]
+a7105 fec WORDS16HEX [lowfirst|highfirst]
+a7105 fec default                    # back to the guess
+```
+
+The coding lives in RAM, so a firmware reload resets it to the default.
+`tools/a7105_sniff.py` works it out from a handset (see the home steps below).
+Once it's known, it becomes the default in `a7105_coding_default()`.
 
 ### Frequency hopping
 
@@ -83,6 +120,27 @@ To fit a packet into one capture it runs at 2–3 MSPS, where the slices are onl
 | FrSky D8, normal | 15/15 |
 | FrSky D16 / D8, bind | 4/4 each (channel 0, bind packets) |
 
+`tools/flysky_check.py` does the same for the A7105 protocols, decoding with the
+coding the firmware is using (read with `a7105 coding`). So it proves the packets
+match that coding, not that the coding matches the real chip.
+
+| Mode | Result |
+|---|---|
+| FlySky (AFHDS), normal | 8/8: CRC ok, channel in hop table, TX ID and channel values as expected |
+| AFHDS2A, normal | 8/8 |
+| AFHDS2A, bind | 4/4 |
+
+Two more checks for the A7105 tools, both without a handset:
+
+- **Coding sniffer:** the virtual chip was given a hidden coding (another Hamming
+  layout, low nibble first, CRC 0x8005 / init 0x1D0F, reflected). `a7105_sniff.py`
+  recovered it exactly: the FEC and CRC from 12 AFHDS2A bind packets, and the
+  AFHDS CRC from 9 packets at different stick positions.
+- **AFHDS2A bind path:** a made-up receiver reply queued with `a7105 rx` completed
+  the bind, and the data packets then carried that RX ID. The reply decoder in
+  `afhds2a_bind.py` works on a synthetic capture, and with no receiver it times
+  out cleanly.
+
 ## Testing with a FrSky receiver
 
 The firmware has no handset input yet, so channels are set from the console.
@@ -112,9 +170,73 @@ storage for it, so a bound receiver stays bound across reboots. `mpm id HEX`
 changes it. Output power isn't calibrated: the AD9361 attenuator is set from
 PATABLE assuming about +3 dBm at 0 dB attenuation.
 
+## Testing with FlySky (at home)
+
+You need the FlySky handset, the receiver(s), and antennas on **both TX/RX and
+RX2**: the board listens on RX2 for the handset and for the receiver's bind reply.
+Load the bitstream and firmware first (`make -C fw load`).
+
+**1. Learn the coding from the handset.** This step must come first: with the
+guessed coding a receiver will most likely ignore every packet.
+
+- AFHDS2A handset (FS-i6, FS-i6X, ...): put it in bind mode a few tens of cm from
+  the board, move the sticks, then let it leave bind mode if it can (bind and
+  normal packets together make the FEC solution unique):
+  ```bash
+  python3 tools/a7105_sniff.py --save logs/sniff_afhds2a.npz --apply
+  ```
+- AFHDS handset (older FS-T6 / FS-CT6B style): `--proto afhds` (it binds on
+  channel 1). Move the sticks while it captures, because the CRC needs packets
+  that differ.
+
+`--apply` sets the coding on the board. It also prints the `a7105 crc` /
+`a7105 fec` commands; keep them, since a firmware reload forgets the coding.
+`--save` keeps the bursts so the result can be solved again offline (`--load`).
+
+**2. Check our packets with the learned coding:**
+```bash
+python3 tools/flysky_check.py --proto afhds2a --count 8
+```
+With antennas instead of the cable and attenuator the board hears itself over the
+air; raise `--rx-gain` if it finds no packets.
+
+**3a. AFHDS2A receiver (FS-iA6B, FS-X6B, FS-A8S, ...).** These answer the bind with
+their own ID:
+```bash
+python3 tools/afhds2a_bind.py --sub 0     # 0 PWM,IBUS  1 PPM,IBUS  2 PWM,SBUS  3 PPM,SBUS
+```
+Power the receiver with its bind button held while the tool is listening. It
+catches the reply on RX2, passes it to the protocol, waits until it is bound and
+restarts at the normal rate. It prints `mpm rxid ID RX`: after a firmware
+reload, run that and `mpm start flsky2a SUB RX` instead of binding again.
+
+If it only ever reports "a burst without the FlySky ID" or "no reply", the receiver
+may be a one-way model that never answers. Then bind by hand: `mpm start flsky2a 0
+0 0 bind`, wait until the receiver's LED goes solid, `mpm binddone`. Whether
+one-way receivers accept the result is untested.
+
+**3b. AFHDS receiver (FS-R6B, FS-R8B, ...).** One-way, so no reply is needed:
+```
+mpm start flysky 0 0 0 bind     # power the receiver with bind held
+mpm binddone                    # when its LED goes solid, then power-cycle it
+mpm stop
+mpm start flysky
+```
+
+**4. Move a servo:** `mpm ch 1 1844` (as for FrSky). `mpm status` shows the
+packet, retune and late-callback counters.
+
+**What to tell me:** the sniffer's output (or the `logs/sniff_*.npz` file), whether
+each receiver bound and followed the sticks, and `mpm status` after a minute of
+running. If a receiver binds but drops out, try `mpm start flsky2a 0 0 0 OPTION`
+with a small frequency offset as the option.
+
 ## Next
 
 - Handset input: the Multiprotocol serial protocol (EdgeTX/OpenTX "Multi" module)
   on CN2's UART or over USB.
 - The receive path, for D8/D16 telemetry and the protocols that need replies.
-- The A7105 for FlySky AFHDS 2A.
+- Make the coding learned from the handset the firmware default.
+- A timing run of the A7105 protocols at 61.44 MSPS (the 4 MSPS test runs showed
+  retunes up to 4.8 ms and callbacks up to 22 ms late, probably from the capture
+  traffic).

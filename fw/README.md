@@ -5,7 +5,7 @@ Vitis 2022.2 and newlib, with no Xilinx BSP. The start-up code, linker script an
 drivers are all here. The AD9361 is driven by UHD's own AD9361 driver (C++,
 [`third_party/uhd_ad9361`](third_party/uhd_ad9361)), set up as a B210. Multiprotocol's
 protocol code runs unmodified from the [`third_party/multiprotocol`](third_party/multiprotocol)
-submodule against a virtual CC2500; see [docs/multiprotocol.md](../docs/multiprotocol.md).
+submodule against virtual CC2500 and A7105 chips; see [docs/multiprotocol.md](../docs/multiprotocol.md).
 
 ```bash
 make            # build/multitx_fw.elf, .bin, .map
@@ -32,6 +32,9 @@ mtx> fe 1 off
 mtx> mpm start frskyx         # Multiprotocol FrSky X (D16), radio at 61.44 MSPS
 mtx> mpm ch 1 1844            # channel 1 to +100%
 mtx> mpm status
+mtx> mpm stop
+mtx> mpm start flsky2a 0 0 0 bind   # AFHDS2A (virtual A7105), sub 0 = PWM,IBUS
+mtx> a7105 coding             # CRC/FEC coding in use (a7105 crc / fec to change it)
 mtx> mpm stop
 ```
 
@@ -84,6 +87,7 @@ The session counter changes at every boot, which lets the host notice a reload.
 | [`uhd_shim/`](src/uhd_shim) | stand-ins for the UHD/Boost headers the driver includes |
 | [`radio.c`](src/radio.c) | radio layer: LO slices with fast retunes, NCO offset, modem cache, power, front end |
 | [`cc2500.c`](src/cc2500.c) | virtual CC2500: SPI slave with registers, strobes, FIFO; builds and sends packets |
+| [`a7105.c`](src/a7105.c) | virtual A7105: the same for FlySky, plus settable CRC/FEC coding and an RX FIFO filled from the console |
 | [`mpm/`](src/mpm) | Multiprotocol port: Arduino shim, core (globals, start-up, scheduler) |
 | [`hw.h`](src/hw.h) | address map and register access helpers |
 
