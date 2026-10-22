@@ -442,6 +442,19 @@ static int cmd_radio(int argc, char **argv)
 		radio_capture_next();
 		return 0;
 	}
+	if (argc > 1 && !strcmp(argv[1], "start")) {
+		/* radio on without a protocol, e.g. to listen with rf freq rx / adc_capture */
+		if (!radio_running() && radio_start())
+			printf("radio start failed\n");
+		return 0;
+	}
+	if (argc > 1 && !strcmp(argv[1], "stop")) {
+		if (mpm_running())
+			printf("stop the protocol first (mpm stop)\n");
+		else
+			radio_stop();
+		return 0;
+	}
 	return -1;
 }
 
@@ -545,7 +558,7 @@ static const struct shell_cmd cmds[] = {
 	{ "mpm",     "SUBCMD ...",     "Multiprotocol: list | start PROTO [SUB [RX [OPT [bind]]]] |\n"
 	  "                             binddone | stop | ch N VALUE | id HEX | rxid HEX [RX] |\n"
 	  "                             hops | status", cmd_mpm },
-	{ "radio",   "SUBCMD ...",     "rate HZ | rxfollow 0|1 | capture (next packet)", cmd_radio },
+	{ "radio",   "SUBCMD ...",     "rate HZ | start | stop | rxfollow 0|1 | capture (next packet)", cmd_radio },
 	{ "cc2500",  "",               "virtual CC2500 registers and last packet", cmd_cc2500 },
 	{ "a7105",   "[SUBCMD ...]",   "virtual A7105: registers, last packet | coding |\n"
 	  "                             crc POLY INIT [REFLECT [XOROUT]] | fec HEX32 [lowfirst] | fec default |\n"
