@@ -289,6 +289,11 @@ extern "C" void mpm_set_channel(int ch, int value)
 		Channel_data[ch] = value < 0 ? 0 : value > 2047 ? 2047 : value;
 }
 
+extern "C" void mpm_set_option(int opt)
+{
+	option = opt;
+}
+
 extern "C" void mpm_print_status(void)
 {
 	if (multi_protocols_index != 0xFF && remote_callback) {

@@ -384,6 +384,11 @@ static int cmd_mpm(int argc, char **argv)
 		mpm_set_channel(num(argv[2]) - 1, num(argv[3]));
 		return 0;
 	}
+	if (!strcmp(sub, "option") && argc > 2) {
+		/* mpm option N: -128..127, e.g. FrSky frequency fine tune while running */
+		mpm_set_option(strtol(argv[2], NULL, 0));
+		return 0;
+	}
 	if (!strcmp(sub, "id") && argc > 2) {
 		mpm_set_id(num(argv[2]));
 		return 0;
@@ -556,7 +561,8 @@ static const struct shell_cmd cmds[] = {
 	{ "gfsk",    "SUBCMD ...",     "modulator: cfg BAUD DEV [BT] | cc2500 d8|d16 | chan HZ |\n"
 	  "                             level DBFS [RAMP_US] | cw on|off | send [-c] HEX | status", cmd_gfsk },
 	{ "mpm",     "SUBCMD ...",     "Multiprotocol: list | start PROTO [SUB [RX [OPT [bind]]]] |\n"
-	  "                             binddone | stop | ch N VALUE | id HEX | rxid HEX [RX] |\n"
+	  "                             binddone | stop | ch N VALUE | option N | id HEX |\n"
+	  "                             rxid HEX [RX] |\n"
 	  "                             hops | status", cmd_mpm },
 	{ "radio",   "SUBCMD ...",     "rate HZ | start | stop | rxfollow 0|1 | capture (next packet)", cmd_radio },
 	{ "cc2500",  "",               "virtual CC2500 registers and last packet", cmd_cc2500 },

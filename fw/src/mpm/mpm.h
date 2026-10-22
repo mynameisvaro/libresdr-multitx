@@ -14,6 +14,9 @@ void mpm_bind_done(void);
 int  mpm_running(void);
 void mpm_poll(void);                     /* call from the main loop */
 void mpm_set_channel(int ch, int value); /* 0..2047, 1024 = centre */
+/* option byte (FrSky: frequency fine tune) while running; protocols that re-read it
+ * in their callback (CC2500_SetFreqOffset) apply it on the next packet */
+void mpm_set_option(int opt);
 void mpm_print_status(void);
 void mpm_list(void);
 int  mpm_proto_by_name(const char *name);   /* name or number -> protocol, -1 */

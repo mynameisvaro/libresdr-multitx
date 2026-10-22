@@ -161,22 +161,49 @@ The firmware has no handset input yet, so channels are set from the console.
    show a solid link. Move a servo with `mpm ch 1 1844` (channels 1..16, values
    0..2047, centre 1024, ±100% = 204/1844).
 5. `mpm status` shows packet and retune counters. If the receiver doesn't lock,
-   try a small frequency offset, for example `mpm start frskyd 0 0 -20` (the
-   CC2500's FSCTRL0 fine tune, about 1.6 kHz per step). Different CC2500 crystals
-   need different values.
+   try a frequency offset, for example `mpm start frskyd 0 0 -20` or, while running,
+   `mpm option -20` (the CC2500's FSCTRL0 fine tune, about 1.6 kHz per step).
+   Different CC2500 crystals need different values; the XM+ here wants −40.
 
 **Tested 2026-10-22 with an XM+** (FrSky X, sub 0 = D16 FCC, over the USB/IP
 tunnel): bound at the first try (red + green, then solid green), and after a
 power cycle without the bind button the LED goes from red to solid green.
 Switching our transmitter off makes it go red, and green again when it comes back,
-so the link is ours. The green LED flickers very faintly, possibly lost frames;
-not measured yet.
+so the link is ours.
+
+Measured through SBUS (ESP32 monitor below), about 1 m apart:
+
+- **Channels:** exact. Set 204 / 1024 / 1844 / 1500 / 500 / 1700 / 0 / 2047, the XM+
+  outputs 171 / 992 / 1811 / 1467 / 467 / 1667 / 0 / 2014, what Multiprotocol's
+  FrSky scaling predicts (0 is clipped). 111 frames/s = the 9 ms D16 frame.
+- **Frequency:** at option 0 it lost 2–3% of frames. Sweeping the option
+  (`mpm option N` while running, ~1.59 kHz per step) puts the XM+'s 50%-loss edges at
+  about −100 and +20, so its centre is near **option −40 (−63 kHz, 26 ppm)**. The
+  B220's TCXO DAC is at mid-scale, so most of that is probably the receiver's
+  crystal; Multiprotocol users set this per model for the same reason.
+- **At option −40:** 0.74% lost over 87 s, no failsafe, 56 of the 87 seconds with no
+  loss at all; losses come in pairs of frames. No late callbacks (worst 18 µs).
+
+| Option | −120 | −100 | −80 | −60 | −50 | −40 | −30 | −20 | 0 | +10 | +20 | +40 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Lost | 100% | 47% | 4.3% | 1.3% | 1.4% | 1.1% | 1.1% | 1.7% | 1.9–2.6% | 7.7% | 39% | 100% |
+
+One half-second dropout to failsafe happened earlier at option 0, near a burst of
+console commands over the USB/IP tunnel. A long shell command (e.g. `mpm status`'s
+float printing) can delay a callback by ~2 ms, since the shell and the protocol
+share the main loop; that is the main suspect, not proven.
 
 Receivers without servo outputs (XM+, R-XSR) only give SBUS. To see the channels
 and count lost frames, flash [`tools/sbus_monitor`](../tools/sbus_monitor/sbus_monitor.ino)
 to an ESP32 and connect the receiver's SBUS output to GPIO16 (it powers the receiver
 from 5V/VIN too). It prints frames per second, frames the receiver flagged as
 lost, the failsafe flag and channels 1–8, once a second.
+[`tools/sbus_tune.py`](../tools/sbus_tune.py) reads those lines from the ESP32's serial
+port (also through USB/IP), logs them, and sweeps the option byte:
+
+```bash
+python3 tools/sbus_tune.py --port /dev/serial/by-id/usb-Silicon_Labs_CP2102_... --sweep -60 -40 -20 0
+```
 
 The TX ID is fixed (`0x4D545831`, "MTX1") because the board has no non-volatile
 storage for it, so a bound receiver stays bound across reboots. `mpm id HEX`
