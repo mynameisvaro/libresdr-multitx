@@ -5,6 +5,7 @@
 #include "ad9361_spi.h"
 #include "axi_ad9361.h"
 #include "console.h"
+#include "gfsk.h"
 #include "gpio.h"
 #include "hw.h"
 #include "rf.h"
@@ -203,6 +204,103 @@ static int cmd_fe(int argc, char **argv)
 	return 0;
 }
 
+static int hexval(char c)
+{
+	if (c >= '0' && c <= '9') return c - '0';
+	if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+	if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+	return -1;
+}
+
+/* hex string (spaces allowed between arguments) -> bytes; returns count or -1 */
+static int parse_hex(int argc, char **argv, uint8_t *out, int max)
+{
+	int n = 0, half = -1;
+
+	for (int a = 0; a < argc; a++) {
+		for (const char *p = argv[a]; *p; p++) {
+			int v = hexval(*p);
+			if (v < 0)
+				return -1;
+			if (half < 0) {
+				half = v;
+			} else {
+				if (n >= max)
+					return -1;
+				out[n++] = (half << 4) | v;
+				half = -1;
+			}
+		}
+	}
+	return half < 0 ? n : -1;
+}
+
+static int cmd_gfsk(int argc, char **argv)
+{
+	static uint8_t pkt[GFSK_BUF_BYTES];
+	double rate;
+
+	if (argc < 2)
+		return -1;
+	const char *sub = argv[1];
+
+	if (!strcmp(sub, "cfg") && argc > 3) {
+		if (rf_get_rate(&rate))
+			return 0;
+		double bt = argc > 4 ? strtod(argv[4], NULL) : 0.5;
+		gfsk_config(rate, strtod(argv[2], NULL), strtod(argv[3], NULL), bt);
+		printf("%.0f baud, deviation %.0f Hz, %s (sample rate %.0f)\n",
+		       strtod(argv[2], NULL), strtod(argv[3], NULL), bt > 0 ? "GFSK" : "2-FSK", rate);
+		return 0;
+	}
+	if (!strcmp(sub, "cc2500") && argc > 2) {
+		/* FrSky D8 / D16 settings from Multiprotocol's CC2500 tables */
+		int d16 = !strcmp(argv[2], "d16");
+		if (!d16 && strcmp(argv[2], "d8"))
+			return -1;
+		if (rf_get_rate(&rate))
+			return 0;
+		double baud = d16 ? cc2500_baud(0x7B, 0x61) : cc2500_baud(0xAA, 0x39);
+		double dev = d16 ? cc2500_dev(0x51) : cc2500_dev(0x42);
+		gfsk_config(rate, baud, dev, 1.0);
+		printf("FrSky %s: %.1f baud, deviation %.1f Hz, GFSK BT 1\n", argv[2], baud, dev);
+		return 0;
+	}
+	if (!strcmp(sub, "chan") && argc > 2) {
+		gfsk_channel(strtod(argv[2], NULL));
+		return 0;
+	}
+	if (!strcmp(sub, "level") && argc > 2) {
+		gfsk_level(strtod(argv[2], NULL), argc > 3 ? strtod(argv[3], NULL) : 20.0);
+		return 0;
+	}
+	if (!strcmp(sub, "cw") && argc > 2) {
+		gfsk_cw(!strcmp(argv[2], "on"));
+		return 0;
+	}
+	if (!strcmp(sub, "send") && argc > 2) {
+		/* gfsk send [-c] HEX...: -c also starts adc_capture (length set by the host) */
+		int cap = !strcmp(argv[2], "-c");
+		int n = parse_hex(argc - 2 - cap, argv + 2 + cap, pkt, sizeof(pkt));
+		if (n <= 0) {
+			printf("bad hex data\n");
+			return 0;
+		}
+		if (cap)
+			wr32(ADC_CAPTURE_BASE, 1);
+		if (gfsk_send(pkt, 8 * n))
+			printf("busy\n");
+		else
+			printf("sending %d bytes\n", n);
+		return 0;
+	}
+	if (!strcmp(sub, "status")) {
+		printf("%s, sample rate %.0f\n", gfsk_busy() ? "busy" : "idle", gfsk_fs());
+		return 0;
+	}
+	return -1;
+}
+
 static int cmd_reboot(int argc, char **argv)
 {
 	printf("rebooting\n");
@@ -222,6 +320,8 @@ static const struct shell_cmd cmds[] = {
 	  "                             gain rx|tx DB | bw rx|tx HZ | rssi | temp | loopback 0|1", cmd_rf },
 	{ "fe",      "1|2 STATE|WORD", "front end: off | rx2 | rx | tx | fdd, or a raw word", cmd_fe },
 	{ "dds",     "HZ [DBFS] | off", "TX1 test tone from the FPGA DDS (default -12 dBFS)", cmd_dds },
+	{ "gfsk",    "SUBCMD ...",     "modulator: cfg BAUD DEV [BT] | cc2500 d8|d16 | chan HZ |\n"
+	  "                             level DBFS [RAMP_US] | cw on|off | send [-c] HEX | status", cmd_gfsk },
 	{ "reboot",  "",               "restart the firmware",            cmd_reboot },
 };
 

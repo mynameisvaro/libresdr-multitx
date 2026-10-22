@@ -33,18 +33,19 @@ the change back to `system_bd.tcl` (or `write_bd_tcl` and merge it).
 The reference design rebuilds the same way:
 `vivado -mode batch -source hw/ref_b220/create_project.tcl -tclargs build`.
 
-### Last build (phase 1)
+### Last build (phase 2: gfsk_tx)
 
 | | |
 |---|---|
-| Timing | met, WNS +1.14 ns, WHS +0.055 ns |
-| Utilization | 9% LUT, 6% FF, 34% BRAM |
+| Timing | met, WNS +0.75 ns, WHS +0.031 ns |
+| Utilization | 9.5% LUT, 35% BRAM, 4.7% DSP |
 
 ## Simulate
 
 ```bash
 hw/ip/usb_debug_bridge/tb/run_sim.sh        # usb_cmd_proc unit test (xsim)
 python3 tools/test_usbdbg_cosim.py          # usbdbg.py packets through the RTL
+python3 hw/ip/gfsk_tx/tb/check.py           # gfsk_tx: simulate FrSky-style packets, demodulate
 ```
 
 ## Load

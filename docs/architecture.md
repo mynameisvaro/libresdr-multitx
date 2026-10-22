@@ -32,6 +32,8 @@ flowchart LR
   ic --> ad["axi_ad9361<br/>CMOS, DDS"]
   ic --> cap["adc_capture"]
   ad -->|RX samples| cap
+  ic --> gt["gfsk_tx<br/>GFSK + channel NCO"]
+  gt -->|TX samples| ad
   gpio --> dac["tcxo_dac"]
 ```
 
@@ -43,6 +45,7 @@ flowchart LR
 | `usb_debug_bridge` | executes PC commands as AXI reads/writes; can hold the CPU in reset |
 | `axi_ad9361` | ADI core in CMOS dual-port mode, TDD engine off, built-in DDS for test tones |
 | `adc_capture` | records up to 16K I/Q samples from RX1 or RX2 |
+| `gfsk_tx` | packet GFSK/FSK modulator with a channel NCO; feeds the core's TX inputs (DAC `data_sel` = 2) |
 | `ad9361_spi` | AXI Quad SPI wired to the AD9361 |
 | `gpio_fe` | RF switch / LED word per channel |
 | `gpio_ctrl` | AD9361 RESETB, EN_AGC, SYNC, CTRL_IN, ENABLE/TXNRX request; CTRL_OUT inputs |
@@ -66,10 +69,11 @@ in reset (bridge `ctrl_reg` bit 0). Stack and variables live in the fast `data_r
 | `0x4120_0000` | 64 KB | `sys_intc` | CPU, USB |
 | `0x41C0_0000` | 64 KB | `sys_timer` | CPU, USB |
 | `0x4400_0000` | 128 KB | `adc_capture` | CPU, USB |
+| `0x4404_0000` | 64 KB | `gfsk_tx` — GFSK modulator | CPU, USB |
 | `0x44A0_0000` | 64 KB | `ad9361_spi` — AXI Quad SPI (AD9361 SPI) | CPU, USB |
 | `0x7902_0000` | 64 KB | `axi_ad9361` (ADI register map) | CPU, USB |
 
-Interrupts (`sys_intc` inputs): 0 UART, 1 timer, 2 SPI.
+Interrupts (`sys_intc` inputs): 0 UART, 1 timer, 2 SPI, 3 `gfsk_tx` done.
 
 ## GPIO bits
 
@@ -98,6 +102,38 @@ out to the board's DAC automatically.
 | `0x08` | LENGTH | samples to capture (1..16384) |
 | `0x0C` | ID | `0x41444343` ("ADCC") |
 | `0x10000` + 4·n | sample n | `{Q[15:0], I[15:0]}` |
+
+## gfsk_tx registers (base `0x4404_0000`)
+
+The CPU writes a packet as bytes (preamble, sync, payload, CRC; the modem only
+shifts bits out) and the modulation as phase increments for the current sample
+rate `fs`:
+
+```
+freq(t)  = CHAN_INC + DEV_INC * shape(t)         phase units per sample
+shape(t) = sum over k of +-SHAPE[k][pos]         k = previous, current, next bit
+out      = AMPL * exp(j * phase),  phase += freq(t)
+```
+
+| Offset | Name | |
+|---|---|---|
+| `0x00` | CTRL | write bit 0 = 1 to send; bit 1 = CW (unmodulated carrier at CHAN_INC) |
+| `0x04` | STATUS | bit 0 busy, bit 1 done (also the interrupt), [31:16] buffer size (256 bytes) |
+| `0x08` | NBITS | bits to send |
+| `0x0C` | ID | `0x4746534B` ("GFSK") |
+| `0x10` | BAUD_INC | symbol rate / fs · 2³² |
+| `0x14` | DEV_INC | deviation / fs · 2³² (signed) |
+| `0x18` | CHAN_INC | channel offset from the LO / fs · 2³² (signed) |
+| `0x1C` | AMPL | [15:0] amplitude (32767 = full scale), [31:16] ramp step per sample |
+| `0x20` | FLAGS | bit 0 LSB first, bit 1 invert bits |
+| `0x1000` + 4·(256·k + pos) | SHAPE | frequency pulse table, Q1.15, k = 0..2 |
+| `0x2000` + 4·i | PKT | packet byte i |
+
+Settings take effect at the next packet start, or at once when idle (so CW and
+the channel can be retuned live). The first symbol after start is a lead-in at
+the "0" frequency while the amplitude ramps up; after the last bit the
+frequency holds while it ramps down. The table and register maths are in
+`fw/src/gfsk.c` and `tools/gfsk.py`, the testbench in `hw/ip/gfsk_tx/tb/`.
 
 ## USB debug bridge
 

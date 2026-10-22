@@ -25,9 +25,7 @@
 #define DDS_INIT_INCR_1 0x04     /* [31:16] phase offset, [15:0] phase increment */
 #define DDS_SCALE_2    0x08
 #define DDS_INIT_INCR_2 0x0C
-#define DAC_DATA_SEL   0x18      /* 0 = DDS, 3 = zeros */
-#define DATA_SEL_DDS   0
-#define DATA_SEL_ZERO  3
+#define DAC_DATA_SEL   0x18      /* enum axi_ad9361_tx_src */
 #define DDS_FULL_SCALE 0x4000    /* scale 0x1000 gives a quarter of full scale */
 
 void axi_ad9361_init(void)
@@ -66,13 +64,18 @@ void axi_ad9361_dds(double rate_hz, double tone_hz, double dbfs)
 		wr32(base + DDS_INIT_INCR_1, ((ch == 0 ? 0x4000u : 0) << 16) | incr);
 		wr32(base + DDS_SCALE_2, 0);
 		wr32(base + DDS_INIT_INCR_2, 0);
-		wr32(base + DAC_DATA_SEL, DATA_SEL_DDS);
 	}
+	axi_ad9361_tx_source(AXI_AD9361_TX_DDS);
 	wr32(DAC + REG_DAC_SYNC, 1);
 }
 
 void axi_ad9361_dds_off(void)
 {
+	axi_ad9361_tx_source(AXI_AD9361_TX_ZERO);
+}
+
+void axi_ad9361_tx_source(enum axi_ad9361_tx_src src)
+{
 	for (int ch = 0; ch < 2; ch++)
-		wr32(DAC + CHAN(ch) + DAC_DATA_SEL, DATA_SEL_ZERO);
+		wr32(DAC + CHAN(ch) + DAC_DATA_SEL, src);
 }

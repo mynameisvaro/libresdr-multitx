@@ -22,6 +22,10 @@ mtx> fe 1 fdd                 # front end: TX on TX/RX, RX on RX2 (PA needs ~0.5
 mtx> dds 1e6 -12              # 1 MHz complex tone from the FPGA DDS into TX1
 mtx> rf temp
 mtx> dds off
+mtx> gfsk cc2500 d16          # FrSky D16 modulation from the CC2500 register values
+mtx> gfsk chan 300e3          # NCO offset from the TX LO
+mtx> gfsk level -6 20         # -6 dBFS, 20 us ramp
+mtx> gfsk send AAAAAAAAD391D391 1D0102  # bytes as hex, sent MSB first
 mtx> fe 1 off
 ```
 
@@ -69,7 +73,8 @@ The session counter changes at every boot, which lets the host notice a reload.
 | [`gpio.c`](src/gpio.c) | `gpio_ctrl` (AD9361 control lines, LED) and `gpio_fe` |
 | [`ad9361_spi.c`](src/ad9361_spi.c) | AD9361 SPI through the AXI Quad SPI, hardware reset |
 | [`rf.cpp`](src/rf.cpp) | B220 glue for UHD's AD9361 driver (board parameters: port A only, CMOS, 40 MHz; SPI access; RX DC/I/Q tracking kept on) behind a C API, [`rf.h`](src/rf.h) |
-| [`axi_ad9361.c`](src/axi_ad9361.c) | FPGA side of the data port: ADI core set-up (1R1T, inverted FB_CLK) and its DDS |
+| [`axi_ad9361.c`](src/axi_ad9361.c) | FPGA side of the data port: ADI core set-up (1R1T, inverted FB_CLK), its DDS, TX source select |
+| [`gfsk.c`](src/gfsk.c) | `gfsk_tx` driver: Gaussian pulse table, phase increments, packets; CC2500 rate/deviation maths |
 | [`uhd_shim/`](src/uhd_shim) | stand-ins for the UHD/Boost headers the driver includes |
 | [`hw.h`](src/hw.h) | address map and register access helpers |
 

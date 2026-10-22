@@ -13,6 +13,7 @@
 #define INTC_BASE        0x41200000u
 #define TIMER_BASE       0x41C00000u
 #define ADC_CAPTURE_BASE 0x44000000u
+#define GFSK_TX_BASE     0x44040000u   /* GFSK modulator + channel NCO */
 #define AD9361_SPI_BASE  0x44A00000u   /* AXI Quad SPI */
 #define AXI_AD9361_BASE  0x79020000u   /* ADI axi_ad9361 core */
 
