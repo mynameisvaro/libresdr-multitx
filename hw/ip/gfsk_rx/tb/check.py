@@ -29,7 +29,7 @@ WORK = os.path.join(here, "work")
 FS = 61.44e6
 
 
-def rx_regs(fs, baud, chan_hz, sync, nbits, mask=0xFFFFFFFF, maxerr=2, invert=False):
+def rx_regs(fs, baud, chan_hz, sync, nbits, mask=0xFFFFFFFF, maxerr=2, invert=False, minlevel=60):
     """Register values for gfsk_rx (fw/src/gfsk_rx.c does the same)."""
     r = max(1, min(256, int(fs / (baud * 8))))       # about 8 samples per bit
     shift = max(0, math.ceil(3 * math.log2(r)) - 6)   # full scale stays inside 18 bits
@@ -45,6 +45,7 @@ def rx_regs(fs, baud, chan_hz, sync, nbits, mask=0xFFFFFFFF, maxerr=2, invert=Fa
         (0x20, mask),
         (0x24, gain << 24 | tc << 16 | int(invert) << 8 | maxerr),
         (0x08, nbits),
+        (0x38, minlevel),
     ]
 
 

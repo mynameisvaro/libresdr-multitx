@@ -1,0 +1,9 @@
+{
+  "additionalFiles": "",
+  "compiler.optimization_flags": "-Os",
+  "customBuildProperties": "",
+  "fqbn": "esp32:esp32:esp32",
+  "hardwareFolders": "/home/vega-1/.arduino15/packages/esp32/hardware/esp32/3.3.12,/home/vega-1/.arduino15/packages/esp32/hardware/esp32/3.3.12",
+  "otherLibrariesFolders": "/home/vega-1/Arduino/libraries",
+  "sketchLocation": "/home/vega-1/VARO/libresdr_multitx/tools/sx127x_listen"
+}

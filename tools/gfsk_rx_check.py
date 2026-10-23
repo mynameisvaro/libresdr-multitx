@@ -21,7 +21,7 @@ import time
 
 from usbdbg import Bridge, Console
 
-LO_BAND = 2440e6
+GFSK_TX = 0x44040000            # gfsk_tx: 0x00 CTRL, 0x08 NBITS, 0x2000 + 4 * i packet bytes
 # name: (baud, deviation, BT, preamble byte, sync, payload bits, channels as offsets from the LO)
 CASES = {
     "a7105": (500e3, 186e3, 0.7, 0x55, 0x5475C52A, 39 * 14, [-12e6, -3e6, 5e6, 15e6]),
@@ -35,8 +35,15 @@ def main():
     ap.add_argument("--rx-gain", type=float, default=30)
     a = ap.parse_args()
 
-    con = Console(Bridge())
+    br = Bridge()
+    con = Console(br)
     random.seed(4)
+
+    def send(pkt):
+        # written over the bridge: an A7105 test packet is longer than a console line
+        br.write(GFSK_TX + 0x2000, list(pkt))
+        br.write(GFSK_TX + 0x08, [8 * len(pkt)])
+        br.write(GFSK_TX + 0x00, [1])
 
     def run(c, timeout=30):
         out = con.run(c, timeout=timeout).strip()
@@ -46,7 +53,10 @@ def main():
 
     results = []
     try:
-        for c in ("mpm stop", "radio stop", "radio rate 61440000", "radio start", f"rf gain rx {a.rx_gain}"):
+        # (the raw gfsk commands bypass the radio layer, which sets the TX gain per
+        # packet: set it here, about -10 dBm out)
+        for c in ("mpm stop", "radio stop", "radio rate 61440000", "radio start", f"rf gain rx {a.rx_gain}",
+                  "rf gain tx 76"):
             run(c)
         lo = float(re.search(r"LO ([0-9.]+) MHz", run("mpm status")).group(1)) * 1e6
         for name, (baud, dev, bt, pre, sync, nbits, offsets) in CASES.items():
@@ -64,7 +74,7 @@ def main():
                     pkt = bytes([pre] * 4) + sync.to_bytes(4, "big") + pbytes + b"\x55"
                     run(f"grx arm {freq:.0f} {baud:.0f} {sync:08x} {nbits}")
                     run(f"gfsk chan {off:.0f}")
-                    run("gfsk send " + pkt.hex())
+                    send(pkt)
                     time.sleep(0.05)
                     out = run("grx")
                     lines = out.splitlines()

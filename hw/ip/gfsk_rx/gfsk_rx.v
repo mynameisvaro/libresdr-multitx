@@ -31,6 +31,8 @@
 //                    phase units (2^16 = one turn) per decimated sample)
 //   0x30 LEVEL    R: [17:0] average magnitude at the sync word (CORDIC units)
 //   0x34 SYNCERR  R: [5:0] bit errors in the matched sync word
+//   0x38 MINLEVEL RW: [17:0] a sync match counts only at this average magnitude
+//                     or more (noise alone makes sync-like bit patterns)
 //   0x1000 + 4*i  R: buffer byte i in bits [7:0]
 //
 // Configuration is latched on arm. The sample side runs on adc_clk (the AD9361
@@ -83,6 +85,7 @@ module gfsk_rx #(
   // ================================================================ AXI side
   reg [NBITS_W-1:0] nbits;
   reg [31:0] chan_inc, decim, baud_inc, sync, mask, cfg;
+  reg [17:0] minlevel;
   reg        arm_tgl, stop_tgl;
   reg        busy, done;
   wire       done_tgl_s;
@@ -106,6 +109,7 @@ module gfsk_rx #(
       baud_inc      <= 0;
       sync          <= 0;
       mask          <= 32'hFFFF_FFFF;
+      minlevel      <= 0;
       cfg           <= 32'h0204_0002;   // 2 errors, tracker 2^4, DPLL gain 2^-2
       arm_tgl       <= 1'b0;
       stop_tgl      <= 1'b0;
@@ -140,6 +144,7 @@ module gfsk_rx #(
             6'h07: sync     <= s_axi_wdata;
             6'h08: mask     <= s_axi_wdata;
             6'h09: cfg      <= s_axi_wdata;
+            6'h0E: minlevel <= s_axi_wdata[17:0];
             default: ;
           endcase
         end
@@ -181,6 +186,7 @@ module gfsk_rx #(
           6'h0B:   s_axi_rdata <= {16'd0, res_fofs};
           6'h0C:   s_axi_rdata <= {14'd0, res_level};
           6'h0D:   s_axi_rdata <= {26'd0, res_err};
+          6'h0E:   s_axi_rdata <= {14'd0, minlevel};
           default: s_axi_rdata <= 32'd0;
         endcase
       end
@@ -199,6 +205,7 @@ module gfsk_rx #(
   reg [ 5:0] r_maxerr = 0;
   reg        r_invert = 1'b0;
   reg [ 3:0] r_tc = 4, r_gain = 2;
+  reg [17:0] r_minlevel = 0;
   reg [NBITS_W-1:0] r_nbits = 8;
 
   always @(posedge adc_clk) begin
@@ -216,6 +223,7 @@ module gfsk_rx #(
       r_tc     <= cfg[19:16];
       r_gain   <= cfg[27:24];
       r_nbits  <= nbits;
+      r_minlevel <= minlevel;
     end
   end
 
@@ -435,7 +443,7 @@ module gfsk_rx #(
             sr_new <= 1'b1;
           end
           if (sr_new) begin
-            if (popcount32(diff) <= r_maxerr) begin
+            if (popcount32(diff) <= r_maxerr && lvl[25:8] >= r_minlevel) begin
               state      <= S_CAPT;
               freeze     <= 1'b1;
               bcnt       <= 0;

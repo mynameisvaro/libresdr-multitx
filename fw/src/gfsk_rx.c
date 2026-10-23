@@ -18,6 +18,7 @@
 #define FOFS     0x2C
 #define LEVEL    0x30
 #define SYNCERR  0x34
+#define MINLEVEL 0x38
 #define BUF(i)   (0x1000 + 4 * (i))
 
 #define GFRX_ID  0x47465258u            /* "GFRX" */
@@ -36,6 +37,17 @@ int gfsk_rx_present(void)
  * about 8 samples per bit after the CIC, its R^3 gain kept inside 18 bits,
  * the offset tracker over about 4 bits, DPLL gain 1/4. */
 static double cur_fs, cur_baud, fs_dec;
+static uint32_t min_level = 60;
+
+void gfsk_rx_set_min_level(uint32_t level)
+{
+	min_level = level;
+}
+
+uint32_t gfsk_rx_min_level(void)
+{
+	return min_level;
+}
 static uint32_t decim_reg, baud_reg, tc;
 
 static void rate_setup(double fs, double baud)
@@ -72,6 +84,7 @@ int gfsk_rx_arm(double fs, double offset_hz, const struct gfsk_rx_cfg *c)
 	wr32(GFSK_RX_BASE + MASK, c->mask);
 	wr32(GFSK_RX_BASE + CFG, 2u << 24 | tc << 16 | (c->invert ? 1u << 8 : 0) | (uint32_t)(c->maxerr & 0x3F));
 	wr32(GFSK_RX_BASE + NBITS, (uint32_t)c->nbits);
+	wr32(GFSK_RX_BASE + MINLEVEL, min_level);
 	wr32(GFSK_RX_BASE + CTRL, 1);
 	return 0;
 }

@@ -7,9 +7,9 @@
 // Wiring (classic ESP32 DevKit, Ai-Thinker Ra-02 pin names):
 //   SX1278 3.3V -> 3V3 (not 5 V)    SX1278 GND  -> GND
 //   SX1278 SCK  -> GPIO18           SX1278 MISO -> GPIO19
-//   SX1278 MOSI -> GPIO23           SX1278 NSS  -> GPIO5
+//   SX1278 MOSI -> GPIO25           SX1278 NSS  -> GPIO5
 //   SX1278 RST  -> GPIO14           SX1278 DIO0 -> GPIO26
-//   receiver SBUS -> GPIO16 (optional, as in sbus_monitor)
+//   receiver SBUS -> GPIO27 (optional)
 // Fit an antenna. The same pins suit ExpressLRS's Unified_ESP32_900_RX firmware.
 //
 // Commands (115200 baud, one per line):
@@ -27,12 +27,12 @@
 
 #define PIN_SCK  18
 #define PIN_MISO 19
-#define PIN_MOSI 23
+#define PIN_MOSI 25
 #define PIN_NSS  5
 #define PIN_RST  14
 #define PIN_DIO0 26
 
-#define SBUS_RX_PIN 16
+#define SBUS_RX_PIN 27
 #define SBUS_TX_PIN 17
 #define FRAME_GAP_US 2000
 

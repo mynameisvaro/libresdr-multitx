@@ -824,6 +824,12 @@ static int cmd_grx(int argc, char **argv)
 		radio_rx_stop();
 		return 0;
 	}
+	if (!strcmp(argv[1], "minlevel")) {
+		if (argc > 2)
+			gfsk_rx_set_min_level(num(argv[2]));
+		printf("sync matches count from level %lu\n", (unsigned long)gfsk_rx_min_level());
+		return 0;
+	}
 	return -1;
 }
 
@@ -866,7 +872,7 @@ static const struct shell_cmd cmds[] = {
 	  "                             domain NAME | switch 0|1|2 | tlm std|off|N | modelmatch on|off |\n"
 	  "                             power DBM | capsync (capture the next sync packet)", cmd_elrs, SHELL_LIVE },
 	{ "grx",     "[SUBCMD ...]",   "GFSK receiver: status (+ bits) | arm FREQ BAUD SYNC NBITS [MAXERR [MASK]] |\n"
-	  "                             stop", cmd_grx, 0 },
+	  "                             stop | minlevel [N]", cmd_grx, 0 },
 	{ "reboot",  "",               "restart the firmware",            cmd_reboot, 0 },
 };
 

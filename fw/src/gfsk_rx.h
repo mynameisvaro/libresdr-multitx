@@ -25,6 +25,11 @@ struct gfsk_rx_result {
 };
 
 int  gfsk_rx_present(void);             /* the bitstream has gfsk_rx */
+/* A sync match only counts at this average level or more: noise makes
+ * sync-like bit patterns (around 10-20 at RX gain 30; packets through the
+ * loopback cable read ~25000). Default 60. */
+void gfsk_rx_set_min_level(uint32_t level);
+uint32_t gfsk_rx_min_level(void);
 /* Search at offset_hz from the RX LO for sample rate fs; 0 when armed. */
 int  gfsk_rx_arm(double fs, double offset_hz, const struct gfsk_rx_cfg *c);
 void gfsk_rx_stop(void);

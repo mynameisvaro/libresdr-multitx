@@ -91,6 +91,7 @@ def main():
           f"{r.size} bytes, {a.seconds:.0f} s, port {port}")
 
     pkts = []
+    garbled = 0
     t_end = time.time() + a.seconds
     while time.time() < t_end:
         line = s.readline().decode(errors="replace").strip()
@@ -102,6 +103,9 @@ def main():
         if not m:
             continue
         t, n, rssi, snr, fei, crcerr, hexs = m.groups()
+        if len(hexs) != 2 * int(n):     # (a line cut short or run into the next)
+            garbled += 1
+            continue
         pkts.append(dict(t=int(t), rssi=int(rssi), snr=float(snr), fei=int(fei), crcerr=int(crcerr),
                          pkt=bytes.fromhex(hexs)))
         if a.raw:
@@ -116,11 +120,14 @@ def main():
         print("[FAIL] no packets received (wiring? antenna? the board's power and distance?)")
         return 1
 
-    good, rc, sync, bad = [], 0, 0, 0
+    # bad: a valid CRC but wrong contents (a protocol error); crc_bad: no CRC
+    # matches (a radio error: ExpressLRS turns the LoRa CRC off, so the chip
+    # passes corrupted packets on)
+    good, rc, sync, bad, crc_bad = [], 0, 0, 0, 0
     for p in pkts:
         d = elrs.parse(p["pkt"], uid)
         if d is None:
-            bad += 1
+            crc_bad += 1
             continue
         p["d"] = d
         if d["type"] == "sync":
@@ -142,8 +149,10 @@ def main():
             p["nonces"] = d["nonces"]
         good.append(p)
     n = len(pkts)
-    print(f"[{'PASS' if bad == 0 else 'FAIL'}] {n} packets from the SX127x: {len(good)} with a valid ExpressLRS CRC "
-          f"({rc} rc, {sync} sync), {bad} bad, {sum(p['crcerr'] for p in pkts)} LoRa CRC flags")
+    ok_pkts = bad == 0 and len(good) >= 0.95 * n and sync > 0
+    print(f"[{'PASS' if ok_pkts else 'FAIL'}] {n} packets from the SX127x: {len(good)} with a valid ExpressLRS CRC "
+          f"({rc} rc, {sync} sync), {crc_bad} failed the CRC (radio errors), {bad} with wrong contents"
+          + (f", {garbled} serial lines garbled" if garbled else ""))
 
     # timing: pick each RC packet's nonce so consecutive packets agree with their
     # arrival times (the CRC alone can match more than one nonce)
@@ -173,7 +182,7 @@ def main():
     fei = statistics.median(p["fei"] for p in pkts)
     print(f"  RSSI {rssi:.0f} dBm, SNR {snr:.1f} dB, frequency error (chip FEI) {fei:+.0f} Hz "
           f"({fei / freq * 1e6:+.1f} ppm)")
-    return 0 if bad == 0 and good else 1
+    return 0 if ok_pkts else 1
 
 
 if __name__ == "__main__":
