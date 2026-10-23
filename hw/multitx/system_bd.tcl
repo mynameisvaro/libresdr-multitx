@@ -10,7 +10,8 @@
 #                                                    code_ram port B (code loading)
 #
 #   axi_ad9361 (ADI) ── AD9361 CMOS data port; samples ──► adc_capture
-#   gfsk_tx   : packet GFSK modulator + channel NCO ──► axi_ad9361 TX data (DMA inputs)
+#   gfsk_tx   : packet GFSK modulator + channel NCO ──┐
+#   lora_tx   : LoRa chirp modulator + channel NCO ───┴► tx_select ──► axi_ad9361 TX data
 #   gpio_fe   : RF switch / LED word per channel (same bits as UHD's ATR)
 #   gpio_ctrl : AD9361 reset/AGC/sync/CTRL_IN, ENABLE/TXNRX request, user LED
 #   gpio_dac  : 40 MHz TCXO tuning word ──► tcxo_dac (SPI to the board's DAC)
@@ -186,7 +187,7 @@ connect_bd_net [get_bd_pins ad9361_spi/sck_o]    [get_bd_ports ad9361_spi_sck]
 connect_bd_net [get_bd_pins ad9361_spi/ss_o]     [get_bd_ports ad9361_spi_csn]
 wire sys_clkgen/clk_out1 ad9361_spi/ext_spi_clk
 
-add_ip sys_irq xilinx.com:ip:xlconcat:2.1 {CONFIG.NUM_PORTS 4}
+add_ip sys_irq xilinx.com:ip:xlconcat:2.1 {CONFIG.NUM_PORTS 5}
 wire sys_uart/interrupt        sys_irq/In0
 wire sys_timer/interrupt       sys_irq/In1
 wire ad9361_spi/ip2intc_irpt   sys_irq/In2
@@ -268,14 +269,28 @@ wire axi_ad9361/adc_data_q0  adc_capture/adc_data_q0
 wire axi_ad9361/adc_data_i1  adc_capture/adc_data_i1
 wire axi_ad9361/adc_data_q1  adc_capture/adc_data_q1
 
-# GFSK modulator: drives TX1 through the core's DMA inputs (DAC data_sel = 2);
-# the core's DDS stays available for tests (data_sel = 0)
+# Modulators: GFSK (FrSky, FlySky) and LoRa (ExpressLRS); tx_select passes the
+# active one to TX1 through the core's DMA inputs (DAC data_sel = 2). The core's
+# DDS stays available for tests (data_sel = 0).
 add_module gfsk_tx gfsk_tx
 wire axi_ad9361/l_clk        gfsk_tx/dac_clk
 wire axi_ad9361/dac_valid_i0 gfsk_tx/dac_valid
-wire gfsk_tx/dac_data_i      axi_ad9361/dac_data_i0
-wire gfsk_tx/dac_data_q      axi_ad9361/dac_data_q0
 wire gfsk_tx/irq             sys_irq/In3
+
+add_module lora_tx lora_tx
+wire axi_ad9361/l_clk        lora_tx/dac_clk
+wire axi_ad9361/dac_valid_i0 lora_tx/dac_valid
+wire lora_tx/irq             sys_irq/In4
+
+add_module tx_select tx_select
+wire axi_ad9361/l_clk        tx_select/clk
+wire gfsk_tx/dac_data_i      tx_select/gfsk_i
+wire gfsk_tx/dac_data_q      tx_select/gfsk_q
+wire lora_tx/tx_active       tx_select/lora_active
+wire lora_tx/dac_data_i      tx_select/lora_i
+wire lora_tx/dac_data_q      tx_select/lora_q
+wire tx_select/dac_i         axi_ad9361/dac_data_i0
+wire tx_select/dac_q         axi_ad9361/dac_data_q0
 
 # ---------------------------------------------------------------- AXI interconnect
 set slaves {
@@ -290,6 +305,7 @@ set slaves {
   axi_ad9361/s_axi
   adc_capture/s_axi
   gfsk_tx/s_axi
+  lora_tx/s_axi
 }
 add_ip axi_cpu_interconnect xilinx.com:ip:axi_interconnect:2.1 \
   [list CONFIG.NUM_SI 2 CONFIG.NUM_MI [llength $slaves]]
@@ -308,7 +324,7 @@ wire sys_clkgen/clk_out1 axi_cpu_interconnect/ACLK axi_cpu_interconnect/S00_ACLK
 wire sys_rstgen/interconnect_aresetn axi_cpu_interconnect/ARESETN
 wire sys_rstgen/peripheral_aresetn axi_cpu_interconnect/S00_ARESETN axi_cpu_interconnect/S01_ARESETN
 
-foreach c {code_ram_axi sys_uart sys_intc sys_timer gpio_fe gpio_ctrl gpio_dac ad9361_spi axi_ad9361 adc_capture gfsk_tx} {
+foreach c {code_ram_axi sys_uart sys_intc sys_timer gpio_fe gpio_ctrl gpio_dac ad9361_spi axi_ad9361 adc_capture gfsk_tx lora_tx} {
   wire sys_clkgen/clk_out1            $c/s_axi_aclk
   wire sys_rstgen/peripheral_aresetn $c/s_axi_aresetn
 }
@@ -336,6 +352,7 @@ place sys_intc     0x41200000 64K  DU
 place sys_timer    0x41C00000 64K  DU
 place adc_capture  0x44000000 128K DU
 place gfsk_tx      0x44040000 64K  DU
+place lora_tx      0x44050000 64K  DU
 place ad9361_spi   0x44A00000 64K  DU
 place axi_ad9361   0x79020000 64K  DU
 

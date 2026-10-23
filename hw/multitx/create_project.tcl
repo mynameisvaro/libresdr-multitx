@@ -25,6 +25,8 @@ add_files -norecurse [concat \
         $hw/ip/adc_capture/adc_capture.v \
         $hw/ip/gfsk_tx/gfsk_tx.v \
         $hw/ip/gfsk_tx/gfsk_tx_sincos.mem \
+        $hw/ip/lora_tx/lora_tx.v \
+        $hw/ip/tx_select/tx_select.v \
         $hw/ip/tcxo_dac/DACx311_auto_spi.v \
         $here/system_top.v]]
 update_compile_order -fileset sources_1

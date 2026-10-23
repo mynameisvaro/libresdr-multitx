@@ -70,10 +70,11 @@ in reset (bridge `ctrl_reg` bit 0). Stack and variables live in the fast `data_r
 | `0x41C0_0000` | 64 KB | `sys_timer` | CPU, USB |
 | `0x4400_0000` | 128 KB | `adc_capture` | CPU, USB |
 | `0x4404_0000` | 64 KB | `gfsk_tx` — GFSK modulator | CPU, USB |
+| `0x4405_0000` | 64 KB | `lora_tx` — LoRa chirp modulator ([lora.md](lora.md)) | CPU, USB |
 | `0x44A0_0000` | 64 KB | `ad9361_spi` — AXI Quad SPI (AD9361 SPI) | CPU, USB |
 | `0x7902_0000` | 64 KB | `axi_ad9361` (ADI register map) | CPU, USB |
 
-Interrupts (`sys_intc` inputs): 0 UART, 1 timer, 2 SPI, 3 `gfsk_tx` done. The
+Interrupts (`sys_intc` inputs): 0 UART, 1 timer, 2 SPI, 3 `gfsk_tx` done, 4 `lora_tx` done. The
 firmware enables only the timer: `sys_timer`'s timer 0 is the free-running time
 base (its wrap interrupt extends it to 64 bits), timer 1 the one-shot alarm that
 runs the protocol callbacks.
