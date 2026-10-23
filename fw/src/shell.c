@@ -595,6 +595,8 @@ static int cmd_lora(int argc, char **argv)
 
 	if (argc == 1) {
 		lora_print_cfg();
+		if (!lora_present())
+			printf("no lora_tx in this bitstream\n");
 		return 0;
 	}
 	if (!strcmp(argv[1], "cfg") && argc > 4) {

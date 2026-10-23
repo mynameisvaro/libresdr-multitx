@@ -17,6 +17,7 @@ struct lora_cfg {
  * dbfs below full scale. 0 when started, -1 busy / bad parameters. */
 int  lora_send(double fs, double chan_hz, double dbfs, const struct lora_cfg *c,
                const uint8_t *payload, int len);
+int  lora_present(void);                /* the bitstream has lora_tx */
 int  lora_busy(void);
 int  lora_last_symbols(void);           /* chirps in the last frame */
 

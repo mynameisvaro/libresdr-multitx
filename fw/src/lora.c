@@ -6,6 +6,7 @@
 /* lora_tx registers (hw/ip/lora_tx/lora_tx.v) */
 #define CTRL      0x00
 #define STATUS    0x04
+#define ID        0x0C
 #define NSYM      0x08
 #define CHIP_INC  0x10
 #define SF        0x14
@@ -19,6 +20,7 @@
 #define T_QDOWN   2
 #define MAX_SYMS  1024
 #define RAMP_US   20.0
+#define LORA_ID   0x4C4F5241u           /* "LORA" */
 
 static int last_nsym;
 
@@ -32,9 +34,19 @@ static void entry(int i, int type, int value)
 	wr32(LORA_TX_BASE + ENTRY(i), (uint32_t)(type << 12 | (value & 0xFFF)));
 }
 
+/* Older bitstreams have no lora_tx; the GFSK protocols must keep working there. */
+int lora_present(void)
+{
+	static int present = -1;
+
+	if (present < 0)
+		present = rd32(LORA_TX_BASE + ID) == LORA_ID;
+	return present;
+}
+
 int lora_busy(void)
 {
-	return rd32(LORA_TX_BASE + STATUS) & 1;
+	return lora_present() && (rd32(LORA_TX_BASE + STATUS) & 1);
 }
 
 int lora_last_symbols(void)
@@ -47,7 +59,7 @@ int lora_send(double fs, double chan_hz, double dbfs, const struct lora_cfg *c,
 {
 	static uint16_t syms[MAX_SYMS];
 
-	if (lora_busy() || c->bw <= 0 || c->bw >= fs / 2)
+	if (!lora_present() || lora_busy() || c->bw <= 0 || c->bw >= fs / 2)
 		return -1;
 	int head = c->preamble + 2 + 3;
 	int n = lora_encode(payload, len, &c->code, syms, MAX_SYMS - head);
