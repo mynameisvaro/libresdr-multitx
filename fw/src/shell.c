@@ -21,7 +21,7 @@
 #include "version.h"
 
 #define LINE_MAX  128
-#define ARGS_MAX  10
+#define ARGS_MAX  16
 #define PROMPT    "mtx> "
 
 static char line[LINE_MAX];
@@ -704,8 +704,13 @@ static void execute(char *s)
 	char *argv[ARGS_MAX];
 	int argc = 0;
 
-	for (char *tok = strtok(s, " \t"); tok && argc < ARGS_MAX; tok = strtok(NULL, " \t"))
+	for (char *tok = strtok(s, " \t"); tok; tok = strtok(NULL, " \t")) {
+		if (argc == ARGS_MAX) {
+			printf("too many arguments (at most %d)\n", ARGS_MAX);
+			return;
+		}
 		argv[argc++] = tok;
+	}
 	if (!argc)
 		return;
 	for (unsigned i = 0; i < sizeof(cmds) / sizeof(cmds[0]); i++) {

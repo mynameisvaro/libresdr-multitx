@@ -139,5 +139,18 @@ mtx> lora send 2440e6 0102030405060708 -10
 ```
 
 `tools/lora_check.py` does this for several configurations and frequencies with
-RX2 capturing each frame through the loopback cable, and decodes it. (Not run
-on the board yet: it needs the bitstream with `lora_tx`.)
+RX2 capturing each frame through the loopback cable (30 dB attenuator, about
+−35 dBFS received), and decodes it, comparing every data symbol:
+
+| Case | Frequencies | Frames |
+|---|---|---|
+| ELRS-like 2.4 GHz: SF5, 812.5 kHz, 4/6, implicit 8 bytes, IQ inverted, preamble 12 | 2405, 2440, 2478 MHz | 17/18 (then 12/12 on a repeat) |
+| ELRS-like 2.4 GHz: SF6, 812.5 kHz, 4/8, implicit, preamble 14 | 2410, 2465 MHz | 4/4 |
+| ELRS-like 900 MHz: SF6, 500 kHz, 4/7, implicit, preamble 8 | 868.4, 915 MHz | 4/4 |
+| SF5, 812.5 kHz, 4/8, explicit header + CRC, sync 0x34 | 2440 MHz | 2/2 |
+
+30 of 31 frames exact. The one miss (the first frame of a run, at 2405 MHz) did
+not come back in 12 repeats; the decoder uses no error correction, which a real
+receiver would, so a single bad symbol at this level is plausible but not
+confirmed. Bitstream `multitx_p4_lora.bin` (WNS +0.67 ns; `lora_tx` uses 6 DSPs,
+80 LUT RAMs, 4 block RAMs).

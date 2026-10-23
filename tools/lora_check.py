@@ -66,17 +66,21 @@ def main():
                 out = con.run(c, timeout=30).strip()
                 if out:
                     print(f"  {c:40s} {out}")
+                if "usage" in out or "unknown" in out or "too many" in out:
+                    raise SystemExit(f"'{c}' was not accepted")
             br.write(ADC_CAPTURE + 0x08, [N])
             for freq in freqs:
                 for i in range(a.count):
                     payload = bytes(random.randrange(256) for _ in range(plen))
                     con.run("radio capture")
-                    con.run(f"lora send {freq:.0f} {payload.hex()}")
-                    for want in (1, 2):         # capture started, then finished
-                        for _ in range(500):
-                            if br.read(ADC_CAPTURE + 0x04)[0] & want:
-                                break
-                            time.sleep(0.002)
+                    out = con.run(f"lora send {freq:.0f} {payload.hex()}").strip()
+                    if out:
+                        print(f"  lora send: {out}")
+                    # the capture starts with the frame, before `lora send` returns
+                    # (which clears its done bit): wait for done
+                    t = time.time()
+                    while not br.read(ADC_CAPTURE + 0x04)[0] & 2 and time.time() - t < 5:
+                        time.sleep(0.002)
                     iq = iq_from_raw(br.read(ADC_CAPTURE + 0x10000, N))
                     st = con.run("mpm status")
                     lo = float(re.search(r"capture LO ([0-9.]+)", st).group(1))

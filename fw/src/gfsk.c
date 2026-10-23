@@ -94,7 +94,7 @@ void gfsk_config(double fs, double baud, double dev_hz, double bt)
 				wr32(GFSK_TX_BASE + SHAPE(k, p), (uint16_t)table[k][p]);
 		loaded_bt = bt;
 	}
-	axi_ad9361_tx_source(AXI_AD9361_TX_GFSK);
+	axi_ad9361_tx_source(AXI_AD9361_TX_MOD);
 }
 
 void gfsk_channel(double offset_hz)

@@ -7,7 +7,8 @@ double axi_ad9361_clk_hz(void);               /* measured interface clock = samp
 void   axi_ad9361_dds(double rate_hz, double tone_hz, double dbfs);  /* complex tone on TX1 */
 void   axi_ad9361_dds_off(void);              /* TX1 sends zeros */
 
-enum axi_ad9361_tx_src { AXI_AD9361_TX_DDS = 0, AXI_AD9361_TX_GFSK = 2, AXI_AD9361_TX_ZERO = 3 };
-void   axi_ad9361_tx_source(enum axi_ad9361_tx_src src);   /* GFSK = gfsk_tx via the DMA inputs */
+enum axi_ad9361_tx_src { AXI_AD9361_TX_DDS = 0, AXI_AD9361_TX_MOD = 2, AXI_AD9361_TX_ZERO = 3 };
+/* MOD = the modulators (gfsk_tx, lora_tx through tx_select) via the DMA inputs */
+void   axi_ad9361_tx_source(enum axi_ad9361_tx_src src);
 
 #endif

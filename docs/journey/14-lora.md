@@ -116,6 +116,26 @@ The chain of trust, from the bottom: real SX1276 recordings → the Python model
 the C encoder (1024 cases) and the Verilog modulator (simulation) → the board
 (`lora_check.py`, through the loopback cable).
 
+On the board, the first run decoded nothing, for two reasons that had nothing to
+do with LoRa:
+
+- **The configuration never arrived.** `lora cfg 5 812.5e3 2 nocrc implicit pre 12
+  sync 12 iqinv` is twelve words; the shell kept ten and printed "usage", which
+  the test script didn't look at. The board sent with the defaults while the
+  decoder expected inverted IQ. Now the shell rejects long lines instead of
+  cutting them, and the script stops when a setup command isn't accepted.
+- **Nothing was transmitted.** The capture showed only the receiver's DC settling:
+  the TX source of the AD9361 core is switched to the modulators by the GFSK code,
+  and after a fresh load only LoRa had run. `lora_send` now selects it too.
+
+Then: **30 of 31 frames exact** at 2405–2478 MHz and at 868 and 915 MHz, the
+ELRS-like settings among them; FrSky D16 still decodes, with no late callbacks.
+
+Synthesis caught one more thing worth knowing: the 1024-entry chirp memory came
+out as 14,900 flip-flops instead of RAM, because it was read at two addresses
+(entry 0 at the start, the next entry while running). LUT RAM has one read port
+next to its write port; one muxed address made it 80 small RAMs.
+
 ## What it led to
 
 The physical layer is ready for ELRS at 900 MHz. Next: the ELRS protocol itself

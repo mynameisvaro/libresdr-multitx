@@ -1,5 +1,6 @@
 #include <math.h>
 
+#include "axi_ad9361.h"
 #include "hw.h"
 #include "lora.h"
 
@@ -90,6 +91,7 @@ int lora_send(double fs, double chan_hz, double dbfs, const struct lora_cfg *c,
 	wr32(LORA_TX_BASE + AMPL, step << 16 | (uint32_t)a);
 	wr32(LORA_TX_BASE + FLAGS, c->invert_iq ? 1 : 0);
 	wr32(LORA_TX_BASE + NSYM, (uint32_t)k);
+	axi_ad9361_tx_source(AXI_AD9361_TX_MOD);    /* (gfsk_config does it for GFSK) */
 	wr32(LORA_TX_BASE + CTRL, 1);
 	last_nsym = k;
 	return 0;
