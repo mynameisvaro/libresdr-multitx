@@ -230,7 +230,7 @@ module gfsk_rx #(
   reg [31:0] nco = 0;
   reg [31:0] sc = 0;
   reg signed [15:0] xi1 = 0, xq1 = 0;
-  reg               v1 = 1'b0, v2 = 1'b0, v3 = 1'b0, v4 = 1'b0;
+  reg               v1 = 1'b0, v2 = 1'b0, v3 = 1'b0;   // valid with xi1, p_*, m*
   reg signed [31:0] p_ic = 0, p_qs = 0, p_qc = 0, p_is = 0;
   reg signed [15:0] mi = 0, mq = 0;
 
@@ -238,7 +238,6 @@ module gfsk_rx #(
     v1 <= adc_valid;
     v2 <= v1;
     v3 <= v2;
-    v4 <= v3;
     if (adc_valid) nco <= nco + r_chan;
     // stage 1: table read, samples aligned with it
     sc  <= sincos[nco[31:20]];
@@ -269,7 +268,7 @@ module gfsk_rx #(
 
   always @(posedge adc_clk) begin
     dv <= 1'b0;
-    if (v4) begin
+    if (v3) begin                     // mi / mq hold a sample
       int1i <= int1i + mi;
       int2i <= int2i + int1i;
       int3i <= int3i + int2i;

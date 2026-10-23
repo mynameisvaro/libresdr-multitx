@@ -7,6 +7,7 @@
 module tb_gfsk_rx;
   parameter real ADC_PERIOD = 16.276;  // ns (61.44 MSPS), overridden by check.py
   parameter integer NSAMP = 1;
+  parameter integer VALID_EVERY = 1;   // 2: a sample every other clock (as the AD9361 core)
 
   reg aclk = 0, adc_clk = 0, aresetn = 0;
   always #5 aclk = ~aclk;
@@ -85,7 +86,7 @@ module tb_gfsk_rx;
     $finish;
   end
 
-  integer k = 0;
+  integer k = 0, ph = 0;
   integer dbg;
   initial dbg = $fopen("debug.txt", "w");
   always @(posedge adc_clk) begin
@@ -94,7 +95,11 @@ module tb_gfsk_rx;
   end
   always @(posedge adc_clk) begin
     sv <= 1'b0;
-    if (playing) begin
+    ph = (ph + 1) % VALID_EVERY;
+    if (playing && ph != 0) begin      // between samples: garbage on the data lines
+      si <= $random;
+      sq <= $random;
+    end else if (playing) begin
       if (k < NSAMP) begin
         si <= iq[k][31:16];
         sq <= iq[k][15:0];

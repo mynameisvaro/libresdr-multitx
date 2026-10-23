@@ -8,7 +8,8 @@ Each case builds a packet (preamble, sync word, random payload), modulates it
 (Gaussian-filtered FSK) at 61.44 MSPS, moves it to a channel offset, adds a
 carrier error and noise, and runs the RTL with the register values the firmware
 uses (rx_regs below, the same maths as fw/src/gfsk_rx.c). PASS: every payload
-bit captured, and nothing found in noise.
+bit captured, and nothing found in noise. Samples come on every other clock
+with garbage in between, as from the AD9361 core.
 """
 
 import math
@@ -76,7 +77,7 @@ def build():
     subprocess.run(["bash", "-c", cmd], check=True)
 
 
-def run(name, baud, dev, bt, pre, sync_bytes, payload_bits, chan, cfo, ampl, noise, expect=True):
+def run(name, baud, dev, bt, pre, sync_bytes, payload_bits, chan, cfo, ampl, noise, expect=True, every=2):
     rng = np.random.default_rng(abs(hash(name)) % 2 ** 32)
     bits = pre + bits_of(sync_bytes) + payload_bits + [0, 1, 0, 1]
     x = modulate(bits, FS, baud, dev, bt) * ampl if expect else np.zeros(int(1.2e-3 * FS), complex)
@@ -93,8 +94,8 @@ def run(name, baud, dev, bt, pre, sync_bytes, payload_bits, chan, cfo, ampl, noi
         for a, d in rx_regs(FS, baud, chan, sync, len(payload_bits)):
             f.write(f"{a:04x}{d:08x}\n")
     out = subprocess.run(["bash", "-c", f"source {VIVADO} && cd {WORK} && "
-                          f"xelab -debug off tb_gfsk_rx -generic_top ADC_PERIOD={1e9 / FS} "
-                          f"-generic_top NSAMP={len(x)} -s tb > xelab.log && xsim tb -R"],
+                          f"xelab -debug off tb_gfsk_rx -generic_top ADC_PERIOD={1e9 / FS / every} "
+                          f"-generic_top NSAMP={len(x)} -generic_top VALID_EVERY={every} -s tb > xelab.log && xsim tb -R"],
                          capture_output=True, text=True)
     log = out.stdout
     res = {}
@@ -148,6 +149,8 @@ def main():
          p_cc, -8e6, -45e3, 50, 4),
     ]
     results = [run(*c) for c in cases]
+    results.append(run("A7105, a sample on every clock", 500e3, 186e3, 0.7, a7105_pre, flysky_id, p_fly,
+                       5e6, 40e3, 400, 8, every=1))
     results.append(run("noise only (A7105 settings)", 500e3, 186e3, 0.7, a7105_pre, flysky_id, p_fly,
                        5e6, 0, 0, 30, expect=False))
     print(f"\n{sum(results)}/{len(results)} passed")
