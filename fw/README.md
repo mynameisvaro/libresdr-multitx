@@ -69,16 +69,26 @@ and is then dropped (counted in `info`), so the firmware never hangs on the cons
 
 The session counter changes at every boot, which lets the host notice a reload.
 
+## Interrupts
+
+Only the timer interrupt is used. The protocol callbacks run from timer 1's alarm,
+so the main loop (shell, console) can be as slow as it likes. Shell commands run
+with interrupts off, which pauses the protocol, unless their entry in the command
+table is marked `SHELL_LIVE`; give a new command that flag only if it doesn't touch
+the radio or the protocol's state (or takes `irq_save()` itself where it does).
+Code called from a protocol callback must not print.
+
 ## Source files
 
 | File | |
 |---|---|
 | [`crt0.S`](src/crt0.S) | exception vectors, reset entry, stack and small-data pointers |
 | [`syscalls.c`](src/syscalls.c) | `.data` copy and `.bss` clear, newlib system calls (`write` goes to the console, `sbrk` to the heap) |
-| [`main.c`](src/main.c) | initialisation, main loop, heartbeat on the user LED |
+| [`main.c`](src/main.c) | initialisation, main loop (shell and console), heartbeat on the user LED |
+| [`irq.c`](src/irq.c) | AXI INTC set-up and the interrupt handler; [`irq.h`](src/irq.h) has `irq_save()`/`irq_restore()` for critical sections |
 | [`console.c`](src/console.c) | mailbox and UART console |
 | [`shell.c`](src/shell.c) | command shell (`help` lists the commands) |
-| [`timer.c`](src/timer.c) | 64-bit time base from `sys_timer` (cascade mode), delays |
+| [`timer.c`](src/timer.c) | 64-bit time base (timer 0 plus a wrap count in its interrupt), one-shot alarm (timer 1), delays |
 | [`gpio.c`](src/gpio.c) | `gpio_ctrl` (AD9361 control lines, LED) and `gpio_fe` |
 | [`ad9361_spi.c`](src/ad9361_spi.c) | AD9361 SPI through the AXI Quad SPI, hardware reset |
 | [`rf.cpp`](src/rf.cpp) | B220 glue for UHD's AD9361 driver (board parameters: port A only, CMOS, 40 MHz; SPI access; RX DC/I/Q tracking kept on) behind a C API, [`rf.h`](src/rf.h) |
@@ -88,7 +98,7 @@ The session counter changes at every boot, which lets the host notice a reload.
 | [`radio.c`](src/radio.c) | radio layer: LO slices with fast retunes, NCO offset, modem cache, power, front end |
 | [`cc2500.c`](src/cc2500.c) | virtual CC2500: SPI slave with registers, strobes, FIFO; builds and sends packets |
 | [`a7105.c`](src/a7105.c) | virtual A7105: the same for FlySky, plus settable CRC/FEC coding and an RX FIFO filled from the console |
-| [`mpm/`](src/mpm) | Multiprotocol port: Arduino shim, core (globals, start-up, scheduler) |
+| [`mpm/`](src/mpm) | Multiprotocol port: Arduino shim, core (globals, start-up, scheduler on the timer alarm) |
 | [`hw.h`](src/hw.h) | address map and register access helpers |
 
 The compiler flags in the [`Makefile`](Makefile) must match the MicroBlaze
