@@ -45,6 +45,7 @@ clock, register, AXI, block design, timing) with examples from this repository.
 | 12 | [The protocol on a timer interrupt](12-timer-interrupt.md) | Measuring a 59 ms stall, then making the console unable to delay a packet |
 | 13 | [The PC as the handset](13-pc-as-handset.md) | Multiprotocol's own serial frames over USB, and a test that was one frame early |
 | 14 | [LoRa, checked against real chips](14-lora.md) | ExpressLRS's physical layer: a model proven on SX1276 recordings, a chirp modulator in Verilog |
+| 15 | [ExpressLRS without a receiver](15-elrs.md) | ExpressLRS's own packet code, our scheduler, and two implementations that must agree |
 
 ## Timeline
 
@@ -65,3 +66,4 @@ clock, register, AXI, block design, timing) with examples from this repository.
 | 2026-10-23 | Handset input from the PC: Multi serial frames over USB | `5f8649d` |
 | 2026-10-23 | LoRa: model reproduces 68/68 real SX1276 frames; lora_tx 30/31 frames on the board | `a2e94e5`, `99ce770` |
 | 2026-10-23 | PPM input from a radio's trainer port: 6/6 on the board with the built-in generator | `d940810` |
+| 2026-10-23 | ExpressLRS 4.x at 900 MHz: 288 PC cases, 27/27 on the board | (this commit) |

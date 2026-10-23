@@ -36,7 +36,7 @@ static const double precompute_bt[] = { 1.0, 0.7, 0 };
 
 static struct radio_stats stats;
 static struct radio_modem cur_modem;
-static double cur_gain = -1, lo_hz;
+static double cur_gain = -1, lo_hz, band_hz = BAND_CAL_HZ;
 static double rate = DEFAULT_RATE, slice = MAX_SLICE_HZ;
 static int running, rx_follow, capture_next;
 
@@ -73,11 +73,11 @@ int radio_start(void)
 	 * calibrations after a retune of more than 100 MHz); from here on the
 	 * packets only need fast retunes */
 	double actual;
-	if (rf_tune(RF_TX, BAND_CAL_HZ, &actual) || rf_tune(RF_RX, BAND_CAL_HZ, NULL))
+	if (rf_tune(RF_TX, band_hz, &actual) || rf_tune(RF_RX, band_hz, NULL))
 		return -1;
 	cur_modem.baud = 0;              /* force a modem reload */
 	cur_gain = -1;
-	lo_hz = BAND_CAL_HZ;
+	lo_hz = band_hz;
 	stats.lo_hz = actual;
 	gpio_fe_set(FE_CHAN - 1, FE_FDD);
 	uint64_t t0 = timer_ticks();
@@ -105,10 +105,31 @@ int radio_tx_busy(void)
 	return gfsk_busy() || lora_busy();
 }
 
-/* centre of the slice holding freq_hz */
+int radio_set_band(double hz)
+{
+	if (hz <= 0)
+		hz = BAND_CAL_HZ;
+	if (hz == band_hz)
+		return 0;
+	band_hz = hz;
+	if (!running)
+		return 0;
+	/* a full tune: the driver runs its calibrations for the new band */
+	double actual;
+	if (rf_tune(RF_TX, band_hz, &actual) || rf_tune(RF_RX, band_hz, NULL))
+		return -1;
+	lo_hz = band_hz;
+	stats.lo_hz = actual;
+	return 0;
+}
+
+/* centre of the slice holding freq_hz: on the 2.4 GHz grid, or with a slice
+ * centred on the band (900 MHz: one slice holds a whole ExpressLRS domain at
+ * 61.44 MSPS, so hops are NCO steps, no retune) */
 static double slice_lo(double freq_hz)
 {
-	return SLICE_BASE_HZ + (floor((freq_hz - SLICE_BASE_HZ) / slice) + 0.5) * slice;
+	double base = band_hz == BAND_CAL_HZ ? SLICE_BASE_HZ : band_hz - slice / 2;
+	return base + (floor((freq_hz - base) / slice) + 0.5) * slice;
 }
 
 /* LO and power for a packet at freq_hz: retune only when the channel leaves the
@@ -159,6 +180,7 @@ static void capture_start(double freq_hz)
 		capture_next = 0;
 		stats.cap_lo_hz = stats.lo_hz;
 		stats.cap_freq_hz = freq_hz;
+		stats.captures++;
 	}
 }
 

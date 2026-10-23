@@ -7,6 +7,7 @@
 #include "axi_ad9361.h"
 #include "console.h"
 #include "cc2500.h"
+#include "elrs.h"
 #include "gfsk.h"
 #include "mpm.h"
 #include "radio.h"
@@ -380,8 +381,8 @@ static int cmd_mpm(int argc, char **argv)
 		       radio_running() ? "on" : "off", (unsigned long)r->packets, r->lo_hz / 1e6,
 		       (unsigned long)r->retunes, (unsigned long)r->last_retune_us,
 		       (unsigned long)r->max_retune_us);
-		printf("rate %.0f, slice %.0f, capture LO %.0f, capture freq %.0f\n", r->rate_hz,
-		       r->slice_hz, r->cap_lo_hz, r->cap_freq_hz);
+		printf("rate %.0f, slice %.0f, capture LO %.0f, capture freq %.0f, captures %lu\n", r->rate_hz,
+		       r->slice_hz, r->cap_lo_hz, r->cap_freq_hz, (unsigned long)r->captures);
 		printf("cc2500 state 0x%02x, %lu packets, %lu errors, last %.4f MHz, %.0f baud, dev %.0f Hz\n",
 		       c->marcstate, (unsigned long)c->tx_packets, (unsigned long)c->tx_errors,
 		       c->last_freq_hz / 1e6, c->baud, c->dev_hz);
@@ -414,6 +415,10 @@ static int cmd_mpm_locked(int argc, char **argv)
 			return 0;
 		}
 		input_console();
+		if (radio_set_band(mpm_band_hz(proto))) {
+			printf("radio band change failed\n");
+			return 0;
+		}
 		if (!radio_running()) {
 			printf("radio on (front end needs ~0.5 s)\n");
 			if (radio_start()) {
@@ -714,6 +719,62 @@ static int cmd_ppm(int argc, char **argv)
 	return -1;
 }
 
+static int cmd_elrs(int argc, char **argv)
+{
+	if (argc == 1) {
+		elrs_print_status();
+		return 0;
+	}
+	const char *sub = argv[1];
+	if (!strcmp(sub, "phrase") && argc > 2) {
+		/* the words joined with single spaces */
+		char p[128];
+		size_t n = 0;
+		p[0] = 0;
+		for (int i = 2; i < argc && n < sizeof(p) - 1; i++) {
+			int w = snprintf(p + n, sizeof(p) - n, "%s%s", i > 2 ? " " : "", argv[i]);
+			n += w > 0 ? (size_t)w : 0;
+		}
+		elrs_set_phrase(p);
+	} else if (!strcmp(sub, "uid") && argc > 2) {
+		/* 6 bytes: 12 hex digits, or decimal with commas as ExpressLRS shows it */
+		uint8_t u[6];
+		if (strchr(argv[2], ',')) {
+			char *s = argv[2];
+			for (int i = 0; i < 6; i++) {
+				u[i] = strtoul(s, &s, 10);
+				if (i < 5 && *s++ != ',')
+					return -1;
+			}
+		} else if (hex_bytes(argv[2], u, 6) != 6) {
+			return -1;
+		}
+		elrs_set_uid(u);
+	} else if (!strcmp(sub, "domain") && argc > 2) {
+		if (elrs_set_domain(argv[2])) {
+			printf("unknown domain (AU915 FCC915 EU868 IN866 AU433 EU433 US433 US433W)\n");
+			return 0;
+		}
+	} else if (!strcmp(sub, "switch") && argc > 2) {
+		elrs_set_switch_mode(num(argv[2]));
+	} else if (!strcmp(sub, "tlm") && argc > 2) {
+		elrs_set_tlm(!strcmp(argv[2], "std") ? ELRS_TLM_STD : !strcmp(argv[2], "off") ? 1 : (int)num(argv[2]));
+	} else if (!strcmp(sub, "modelmatch") && argc > 2) {
+		elrs_set_model_match(!strcmp(argv[2], "on") || !strcmp(argv[2], "1"));
+	} else if (!strcmp(sub, "power") && argc > 2) {
+		elrs_set_power(strtod(argv[2], NULL));
+	} else if (!strcmp(sub, "capsync")) {
+		elrs_capture_sync();            /* for tools/elrs_check.py */
+		return 0;
+	} else {
+		return -1;
+	}
+	elrs_print_status();
+	if (mpm_running())
+		printf("(applies from the next mpm start, except power and model match)\n");
+	return 0;
+}
+
 static int cmd_reboot(int argc, char **argv)
 {
 	printf("rebooting\n");
@@ -749,6 +810,9 @@ static const struct shell_cmd cmds[] = {
 	{ "input",   "[SUBCMD ...]",   "handset input: status | console | ppm [falling] | timeout MS |\n"
 	  "                             range MIN MAX (PPM us for -/+100%)", cmd_input, SHELL_LIVE },
 	{ "ppm",     "[test US... [frame US] | test off]", "PPM decoder (CN2 GPIO_0) and its test generator", cmd_ppm, SHELL_LIVE },
+	{ "elrs",    "[SUBCMD ...]",   "ExpressLRS (mpm start elrs RATE [RX]): phrase WORDS | uid A,B,C,D,E,F |\n"
+	  "                             domain NAME | switch 0|1|2 | tlm std|off|N | modelmatch on|off |\n"
+	  "                             power DBM | capsync (capture the next sync packet)", cmd_elrs, SHELL_LIVE },
 	{ "reboot",  "",               "restart the firmware",            cmd_reboot, 0 },
 };
 

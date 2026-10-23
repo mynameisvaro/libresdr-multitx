@@ -27,6 +27,7 @@
 extern "C" {
 #include "mpm.h"
 }
+#include "elrs.h"
 
 // ---------------------------------------------------------------- globals
 // (Multiprotocol.ino, "Global constants/variables")
@@ -158,6 +159,14 @@ static uint32_t cb_count, cb_late, cb_max_late_us, cb_first_late_us, cb_max_us;
 static void mpm_alarm(void);
 static void mpm_stop_callbacks(void);
 
+static void start_callbacks(uint16_function_t cb)
+{
+	cb_count = cb_late = cb_max_late_us = cb_first_late_us = cb_max_us = 0;
+	next_cb = timer_ticks() + TIMER_US(5000);   // first callback in 5 ms
+	remote_callback = cb;
+	timer_alarm_at(next_cb);
+}
+
 static void modules_reset(void)
 {
 	CC2500_Reset();
@@ -195,10 +204,20 @@ extern "C" int mpm_start(int proto, int sub, int rx_num, int opt, int bind)
 	set_rx_tx_addr(MProtocol_id);
 	SUB_PROTO_INVALID;
 	option_override = 0xFF;
-	if (bind)
+	if (bind && proto != ELRS_PROTO)
 		BIND_IN_PROGRESS;
 	else
 		BIND_DONE;
+
+	// ExpressLRS isn't a Multiprotocol protocol: its own code (src/elrs), with
+	// the rate as the sub-protocol and the RX number as the model ID; no bind mode
+	// (the receiver has the binding phrase)
+	if (proto == ELRS_PROTO) {
+		if (elrs_init(sub, RX_num))
+			return -2;
+		start_callbacks(elrs_callback);
+		return 0;
+	}
 
 	for (uint8_t i = 0; multi_protocols[i].protocol != 0xFF; i++) {
 		if (multi_protocols[i].protocol != protocol)
@@ -212,10 +231,7 @@ extern "C" int mpm_start(int proto, int sub, int rx_num, int opt, int bind)
 		multi_protocols[i].Init();
 		if (!IS_SUB_PROTO_VALID)
 			return -2;
-		cb_count = cb_late = cb_max_late_us = cb_first_late_us = cb_max_us = 0;
-		next_cb = timer_ticks() + TIMER_US(5000);   // first callback in 5 ms
-		remote_callback = multi_protocols[i].CallBack;
-		timer_alarm_at(next_cb);
+		start_callbacks(multi_protocols[i].CallBack);
 		return 0;
 	}
 	return -1;
@@ -471,6 +487,16 @@ extern "C" int mpm_protocol(void)
 	return remote_callback ? protocol | sub_protocol << 8 | RX_num << 16 : -1;
 }
 
+extern "C" uint16_t mpm_channel(int ch)
+{
+	return ch >= 0 && ch < NUM_CHN ? Channel_data[ch] : CHANNEL_MID;
+}
+
+extern "C" double mpm_band_hz(int proto)
+{
+	return proto == ELRS_PROTO ? elrs_band_hz() : 0;
+}
+
 extern "C" void mpm_set_channel(int ch, int value)
 {
 	if (ch >= 0 && ch < NUM_CHN)
@@ -484,15 +510,20 @@ extern "C" void mpm_set_option(int opt)
 
 extern "C" void mpm_print_status(void)
 {
-	if (multi_protocols_index != 0xFF && remote_callback) {
+	if (protocol == ELRS_PROTO && remote_callback) {
+		printf("protocol ELRS (%d), sub %d (%s), rx %d\n", protocol, sub_protocol,
+		       elrs_rate_name(sub_protocol), RX_num);
+		elrs_print_status();
+	} else if (multi_protocols_index != 0xFF && remote_callback) {
 		const mm_protocol_definition *p = &multi_protocols[multi_protocols_index];
 		printf("protocol %s (%d), sub %d, rx %d, option %d, %s\n", p->ProtoString, protocol,
 		       sub_protocol, RX_num, (int8_t)option, IS_BIND_IN_PROGRESS ? "binding" : "bound");
 	} else {
 		printf("no protocol running\n");
 	}
-	printf("TX ID %08lx (rx_tx_addr %02x %02x %02x %02x)\n", (unsigned long)MProtocol_id,
-	       rx_tx_addr[0], rx_tx_addr[1], rx_tx_addr[2], rx_tx_addr[3]);
+	if (protocol != ELRS_PROTO)
+		printf("TX ID %08lx (rx_tx_addr %02x %02x %02x %02x)\n", (unsigned long)MProtocol_id,
+		       rx_tx_addr[0], rx_tx_addr[1], rx_tx_addr[2], rx_tx_addr[3]);
 	if (protocol == PROTO_AFHDS2A)
 		printf("AFHDS2A RX ID %02x%02x%02x%02x (stored for RX %d)\n", rx_id[0], rx_id[1], rx_id[2],
 		       rx_id[3], RX_num);
@@ -516,15 +547,21 @@ extern "C" void mpm_list(void)
 			printf("  %d:%.*s", s, n, p->SubProtoString + 1 + s * n);
 		printf("\n");
 	}
+	printf("  %3d  %-8s", ELRS_PROTO, "ELRS");
+	for (int s = 0; s < ELRS_RATES; s++)
+		printf("  %d:%s", s, elrs_rate_name(s));
+	printf("\n");
 }
 
-// "frskyd", "FrSky X", "15" -> protocol number (-1 if unknown)
+// "frskyd", "FrSky X", "15", "elrs" -> protocol number (-1 if unknown)
 extern "C" int mpm_proto_by_name(const char *name)
 {
 	char *end;
 	long n = strtol(name, &end, 0);
 	if (*name && !*end)
 		return n;
+	if (!strcasecmp(name, "elrs"))
+		return ELRS_PROTO;
 	for (uint8_t i = 0; multi_protocols[i].protocol != 0xFF; i++) {
 		const char *a = multi_protocols[i].ProtoString, *b = name;
 		for (;;) {

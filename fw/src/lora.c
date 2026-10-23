@@ -79,16 +79,29 @@ int lora_send(double fs, double chan_hz, double dbfs, const struct lora_cfg *c,
 	for (int i = 0; i < n; i++)
 		entry(k++, T_UP, syms[i]);
 
-	double a = 32767 * pow(10.0, dbfs / 20.0);
-	if (a > 32767)
-		a = 32767;
-	uint32_t step = (uint32_t)ceil(a / (RAMP_US * 1e-6 * fs));
-	if (step > 0xFFFF)
-		step = 0;
-	wr32(LORA_TX_BASE + CHIP_INC, phase_inc(c->bw, fs));
+	/* (soft-float pow and divisions take hundreds of microseconds on the
+	 * MicroBlaze: only when the level, rate or bandwidth change) */
+	static double last_dbfs = 1, last_fs, last_bw;
+	static uint32_t ampl, chip_inc;
+	if (dbfs != last_dbfs || fs != last_fs) {
+		double a = 32767 * pow(10.0, dbfs / 20.0);
+		if (a > 32767)
+			a = 32767;
+		uint32_t step = (uint32_t)ceil(a / (RAMP_US * 1e-6 * fs));
+		if (step > 0xFFFF)
+			step = 0;
+		ampl = step << 16 | (uint32_t)a;
+		last_dbfs = dbfs;
+	}
+	if (c->bw != last_bw || fs != last_fs) {
+		chip_inc = phase_inc(c->bw, fs);
+		last_bw = c->bw;
+	}
+	last_fs = fs;
+	wr32(LORA_TX_BASE + CHIP_INC, chip_inc);
 	wr32(LORA_TX_BASE + SF, c->code.sf);
 	wr32(LORA_TX_BASE + CHAN_INC, phase_inc(chan_hz, fs));
-	wr32(LORA_TX_BASE + AMPL, step << 16 | (uint32_t)a);
+	wr32(LORA_TX_BASE + AMPL, ampl);
 	wr32(LORA_TX_BASE + FLAGS, c->invert_iq ? 1 : 0);
 	wr32(LORA_TX_BASE + NSYM, (uint32_t)k);
 	axi_ad9361_tx_source(AXI_AD9361_TX_MOD);    /* (gfsk_config does it for GFSK) */

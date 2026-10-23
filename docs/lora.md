@@ -5,6 +5,9 @@ radios: SX127x / LR1121 at 900 MHz, SX1280 / LR1121 at 2.4 GHz. This page covers
 the LoRa physical layer on MultiTX: the coding, the modulator, how both were
 checked, and what is still unknown for ELRS.
 
+The ExpressLRS protocol on top of it (packets, CRC, hopping, the 900 MHz
+transmitter) is in [elrs.md](elrs.md).
+
 ## What ELRS sends
 
 From `src/src/common.cpp` and `src/lib/SX1280Driver` in the ExpressLRS source:

@@ -117,6 +117,7 @@ Code called from a protocol callback must not print.
 | [`input.c`](src/input.c) | handset input: Multi serial frames from the mailbox (USB) or PPM (`ppm_in`), link-loss pause |
 | [`ppm.c`](src/ppm.c) | `ppm_in` driver: decoder, test generator |
 | [`mpm/`](src/mpm) | Multiprotocol port: Arduino shim, core (globals, start-up, scheduler on the timer alarm) |
+| [`elrs/`](src/elrs) | ExpressLRS 4.x transmitter (900 MHz): slot logic in `elrs_tx.cpp`, ExpressLRS's own OTA/FHSS/CRC code from the submodule behind `shim/`, MD5 for binding phrases, board glue in `elrs_hw.c` ([docs/elrs.md](../docs/elrs.md); `fw/test/test_elrs.py` checks it against `tools/elrs.py`) |
 | [`hw.h`](src/hw.h) | address map and register access helpers |
 
 The compiler flags in the [`Makefile`](Makefile) must match the MicroBlaze
@@ -125,7 +126,8 @@ divide, pattern compare, little endian).
 
 ## C++
 
-Only the AD9361 driver is C++. It keeps its exceptions; `rf.cpp` catches them and
+The AD9361 driver, the Multiprotocol port and the ExpressLRS code are C++; only the
+driver throws exceptions. It keeps them; `rf.cpp` catches them and
 returns -1 after printing the message. That needs `crti.o`/`crtbegin.o` and
 `crtend.o`/`crtn.o` around the objects (they register the unwind tables from
 `.init`), and `_cstart` calls `__libc_init_array()`. The link uses `--no-relax`:
@@ -135,6 +137,6 @@ libstdc++ small: the exception shim stores its message in a fixed buffer, so no
 `std::string`, and `rf.cpp` replaces the verbose terminate handler, so the
 demangler is never linked.
 
-Code size today is about 226 KB text plus 12 KB initialised data, of the 508 KB
+Code size today is about 266 KB text plus 14 KB initialised data, of the 508 KB
 in `code_ram` (512 KB since phase 3). The biggest parts are the AD9361 driver
 (~45 KB), soft-float double maths, printf and the C++ unwinder.

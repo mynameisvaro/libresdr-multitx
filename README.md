@@ -9,7 +9,8 @@ receivers. The protocol code comes from the
 project and runs unmodified on a MicroBlaze soft core inside the FPGA. Only the
 per-chip radio drivers are replaced. Instead of talking SPI to a CC2500, NRF24L01,
 A7105, CYRF6936 or SX1276, they drive *virtual radios*: modems in FPGA fabric in
-front of the AD9361. ExpressLRS support is planned on the same foundation.
+front of the AD9361. ExpressLRS 4.x (900 MHz) runs on the same foundation, from
+ExpressLRS's own over-the-air code.
 
 ![Vivado](https://img.shields.io/badge/Vivado-2022.2-blue)
 ![FPGA](https://img.shields.io/badge/FPGA-Artix--7%20XC7A200T-orange)
@@ -21,8 +22,9 @@ front of the AD9361. ExpressLRS support is planned on the same foundation.
 > CC2500, binds a real FrSky XM+ receiver and drives its channels exactly, with
 > 0.74% frames lost at 1 m, driven from the PC over USB with Multiprotocol's
 > own serial frames. FlySky (AFHDS/AFHDS2A) runs on a virtual A7105 and is
-> waiting for its on-air coding to be learned from a real handset. See the
-> [roadmap](#roadmap).
+> waiting for its on-air coding to be learned from a real handset. ExpressLRS 4.x
+> runs at 900 MHz on ExpressLRS's own packet code and passes every check short of a
+> real receiver, which is the next step. See the [roadmap](#roadmap).
 >
 > **New to FPGAs, or curious how a project like this is approached?** Read
 > [the journey](docs/journey/README.md): the whole project, step by step, with the
@@ -77,11 +79,12 @@ Board details, pinout notes and RF switch states: [docs/hardware.md](docs/hardwa
 | [`hw/multitx/`](hw/multitx) | Vivado 2022.2 block design of the MultiTX platform |
 | [`hw/ip/`](hw/ip) | RTL blocks: USB debug bridge, ADC capture, GFSK modulator, TCXO DAC |
 | [`hw/ref_b220/`](hw/ref_b220) | the community reference design, rebuilt in Vivado 2022.2 as a baseline |
-| [`fw/`](fw) | MicroBlaze firmware: AD9361 driver, virtual CC2500/A7105, Multiprotocol port |
+| [`fw/`](fw) | MicroBlaze firmware: AD9361 driver, virtual CC2500/A7105, Multiprotocol port, ExpressLRS TX |
 | [`tools/`](tools) | host tools: `usbdbg.py`, self-test, RF and protocol checkers, ESP32 SBUS monitor |
 | [`remote_usb/`](remote_usb) | USB/IP setup for a board attached to a different machine |
 | [`docs/`](docs) | architecture, hardware, development workflow, design notes |
 | [`reference/`](reference) | submodule: [f4tnk/LibreSDR_UHD_B220_Mini_FPGA](https://github.com/f4tnk/LibreSDR_UHD_B220_Mini_FPGA) at v20e |
+| `fw/third_party/` | submodules: [Multiprotocol](https://github.com/pascallanger/DIY-Multiprotocol-TX-Module), [ExpressLRS](https://github.com/ExpressLRS/ExpressLRS) (4.1.0) |
 
 ## Quick start
 
@@ -111,6 +114,8 @@ Running the board on a remote machine over USB/IP: [docs/remote-usb.md](docs/rem
 | [remote-usb.md](docs/remote-usb.md) | USB/IP + SSH tunnel setup, VM-side FPGA loading |
 | [design-notes.md](docs/design-notes.md) | why the project is built the way it is |
 | [multiprotocol.md](docs/multiprotocol.md) | the Multiprotocol port, the virtual CC2500, hopping, testing with a receiver |
+| [lora.md](docs/lora.md) | the LoRa physical layer: coding, the `lora_tx` modulator, the check against real SX127x recordings |
+| [elrs.md](docs/elrs.md) | the ExpressLRS 4.x transmitter (900 MHz): using it, what comes from ExpressLRS, how it was checked |
 
 ## Roadmap
 
@@ -135,14 +140,15 @@ Running the board on a remote machine over USB/IP: [docs/remote-usb.md](docs/rem
 - [ ] NRF24L01, CYRF6936 (DSSS), SX1276 (LoRa) shims
 - [x] LoRa physical layer: model checked symbol for symbol on real SX1276 recordings, `lora_tx` chirp modulator (simulated) ([docs/lora.md](docs/lora.md))
 - [x] LoRa on the board: 30/31 frames exact through the loopback, 2.4 GHz and 868/915 MHz ([results](docs/lora.md#on-the-board))
-- [ ] ExpressLRS at 900 MHz (standard LoRa coding): packets, FHSS, timing
+- [x] ExpressLRS 4.x at 900 MHz: ExpressLRS's own packet/CRC/hopping code, every rate; checked against an independent model (288 cases) and off the air, 27/27 ([docs/elrs.md](docs/elrs.md))
+- [ ] ExpressLRS with a real receiver (binding phrase), then telemetry and bind mode
 - [ ] ExpressLRS at 2.4 GHz: learn the SX1280's long-interleaving coding; FLRC later
 - [ ] Stand-alone boot (the board has no FPGA flash; needs a small boot host)
 
 ## Acknowledgements
 
 - [DIY Multiprotocol TX Module](https://github.com/pascallanger/DIY-Multiprotocol-TX-Module) — the protocol implementations this project builds on
-- [ExpressLRS](https://github.com/ExpressLRS/ExpressLRS)
+- [ExpressLRS](https://github.com/ExpressLRS/ExpressLRS) — the over-the-air code (packets, CRC, hopping) the ExpressLRS transmitter builds on
 - [f4tnk/LibreSDR_UHD_B220_Mini_FPGA](https://github.com/f4tnk/LibreSDR_UHD_B220_Mini_FPGA) — the B220 FPGA design, pinout and timing constraints
 - [Ettus Research UHD/FPGA](https://github.com/EttusResearch/uhd) — GPIF II slave-FIFO and FIFO code, and the AD9361 driver the firmware uses
 - [Analog Devices HDL](https://github.com/analogdevicesinc/hdl) — `axi_ad9361`
@@ -152,8 +158,9 @@ Running the board on a remote machine over USB/IP: [docs/remote-usb.md](docs/rem
 GPL-3.0-or-later, see [LICENSE](LICENSE). Files under `hw/ip/usb_debug_bridge/ettus/`
 and `hw/ip/tcxo_dac/` are Ettus Research code under LGPL-3.0-or-later, with local
 changes noted in their headers. `fw/third_party/uhd_ad9361/` is UHD's AD9361 driver
-(GPL-3.0-or-later, changes listed in its README), and `fw/third_party/multiprotocol`
-is a submodule of DIY Multiprotocol (GPL-3.0-or-later).
+(GPL-3.0-or-later, changes listed in its README). `fw/third_party/multiprotocol`
+is a submodule of DIY Multiprotocol and `fw/third_party/expresslrs` one of
+ExpressLRS (both GPL-3.0-or-later).
 
 **Regulatory note:** transmitting is your responsibility. Check the rules for your
 band and region, and keep power within legal limits.

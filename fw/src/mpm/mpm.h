@@ -15,6 +15,9 @@ void mpm_stop(void);
 void mpm_bind_done(void);
 int  mpm_running(void);
 void mpm_set_channel(int ch, int value); /* 0..2047, 1024 = centre */
+uint16_t mpm_channel(int ch);
+/* the RF band a protocol uses, for radio_set_band (0 = 2.4 GHz) */
+double mpm_band_hz(int proto);
 /* option byte (FrSky: frequency fine tune) while running; protocols that re-read it
  * in their callback (CC2500_SetFreqOffset) apply it on the next packet */
 void mpm_set_option(int opt);

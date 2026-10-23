@@ -81,7 +81,9 @@ static void start(const struct mpm_model *m)
 	uint32_t msr = irq_save();
 	mpm_stop();
 	bad_proto = 0;
-	if (!radio_running() && radio_start())
+	if (radio_set_band(mpm_band_hz(m->proto)))
+		bad_proto = 1;
+	else if (!radio_running() && radio_start())
 		bad_proto = 1;
 	else if (mpm_start(m->proto, m->sub, m->rx, m->option, m->bind))
 		bad_proto = 1;

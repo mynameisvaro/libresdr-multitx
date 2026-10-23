@@ -14,6 +14,9 @@ struct radio_modem {
 
 int  radio_start(void);              /* rate, front end on (PA settles ~0.5 s); 0 = ok */
 void radio_set_rate(double hz);      /* before radio_start; default 61.44 MSPS */
+/* Centre of the protocol's channels (0: 2.4 GHz): the calibrations run there
+ * and an LO slice is centred on it. Retunes with calibrations if running. */
+int  radio_set_band(double hz);
 void radio_rx_follow(int on);        /* tune the RX LO with the TX LO (for captures) */
 void radio_capture_next(void);       /* start adc_capture with the next packet */
 void radio_stop(void);               /* front end off, silent */
@@ -39,6 +42,7 @@ struct radio_stats {
 	double   last_freq_hz;
 	double   cap_lo_hz;       /* LO and channel of the last captured packet */
 	double   cap_freq_hz;
+	uint32_t captures;        /* adc_capture starts (radio_capture_next) */
 };
 const struct radio_stats *radio_get_stats(void);
 

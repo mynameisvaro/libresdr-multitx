@@ -38,7 +38,8 @@ SLOT_WORDS = 10                         # len + 36 data bytes
 ST_USB, ST_SIGNAL, ST_PAUSED, ST_RUNNING, ST_BINDING, ST_BAD_PROTO = (1 << i for i in range(6))
 
 # protocols built into the firmware (mpm list); numbers also work
-PROTOCOLS = {"flysky": 1, "frskyd": 3, "frskyx": 15, "flsky2a": 28, "afhds2a": 28}
+PROTOCOLS = {"flysky": 1, "frskyd": 3, "frskyx": 15, "flsky2a": 28, "afhds2a": 28,
+             "elrs": 200}            # ExpressLRS (fw/src/elrs): sub = rate, rx = model ID
 
 
 class Frame:

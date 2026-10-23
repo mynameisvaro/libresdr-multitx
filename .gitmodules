@@ -4,3 +4,7 @@
 [submodule "fw/third_party/multiprotocol"]
 	path = fw/third_party/multiprotocol
 	url = https://github.com/pascallanger/DIY-Multiprotocol-TX-Module.git
+[submodule "fw/third_party/expresslrs"]
+	path = fw/third_party/expresslrs
+	url = https://github.com/ExpressLRS/ExpressLRS.git
+	shallow = true

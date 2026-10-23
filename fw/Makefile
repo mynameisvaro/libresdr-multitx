@@ -22,7 +22,7 @@ CPUFLAGS = -mcpu=v11.0 -mlittle-endian -mxl-barrel-shift -mxl-pattern-compare \
            -mno-xl-soft-mul -mno-xl-soft-div -mxl-reorder
 
 CFLAGS  = $(CPUFLAGS) -Os -g -std=gnu11 -Wall -Wextra -Wno-unused-parameter \
-          -ffunction-sections -fdata-sections -Isrc -Isrc/mpm -I$(BUILD)
+          -ffunction-sections -fdata-sections -Isrc -Isrc/mpm -Isrc/elrs -I$(BUILD)
 
 # UHD's AD9361 driver (C++, exceptions on, no RTTI), built against the stand-in
 # headers in src/uhd_shim; see third_party/uhd_ad9361/README.md.
@@ -34,7 +34,15 @@ CXXFLAGS = $(CPUFLAGS) -Os -g -std=gnu++17 -Wall -fno-rtti -fno-threadsafe-stati
 # Multiprotocol's protocol files (git submodule, unmodified), built as one
 # translation unit by src/mpm/mpm_core.cpp. -fpermissive as in the Arduino IDE.
 MPM = third_party/multiprotocol/Multiprotocol
-MPM_CXXFLAGS = $(CXXFLAGS) -fpermissive -w -Isrc/mpm -I$(MPM)
+MPM_CXXFLAGS = $(CXXFLAGS) -fpermissive -w -Isrc/mpm -Isrc/elrs -I$(MPM)
+
+# ExpressLRS's over-the-air code (git submodule, unmodified): packets, CRC, hop
+# sequence, built against the stand-ins in src/elrs/shim; src/elrs is the TX.
+ELRS = third_party/expresslrs/src
+ELRS_CXXFLAGS = $(CXXFLAGS) -w -DRADIO_SX127X -DTARGET_TX -DRegulatory_Domain_FCC_915 \
+                -Isrc/elrs/shim -Isrc/elrs -I$(ELRS)/include -I$(ELRS)/lib/OTA \
+                -I$(ELRS)/lib/FHSS -I$(ELRS)/lib/CRC -I$(ELRS)/lib/FIFO
+ELRS_UPSTREAM = OTA/OTA.cpp FHSS/FHSS.cpp FHSS/random.cpp CRC/crc.cpp
 
 # crti/crtbegin and crtend/crtn bracket the objects: they provide .init (which
 # registers the C++ unwind tables) and the constructor lists.
@@ -50,8 +58,10 @@ LDLIBS  = -Wl,--start-group -lstdc++ -lc -lm -lgcc -Wl,--end-group
 
 SRCS = src/crt0.S src/syscalls.c src/main.c src/console.c src/irq.c src/timer.c \
        src/gpio.c src/ad9361_spi.c src/axi_ad9361.c src/gfsk.c src/radio.c \
-       src/cc2500.c src/a7105.c src/lora_code.c src/lora.c src/ppm.c src/input.c src/shell.c src/rf.cpp src/mpm/mpm_core.cpp
-OBJS = $(patsubst src/%,$(BUILD)/%.o,$(SRCS)) $(BUILD)/uhd_ad9361/ad9361_device.cpp.o
+       src/cc2500.c src/a7105.c src/lora_code.c src/lora.c src/ppm.c src/input.c src/shell.c src/rf.cpp src/mpm/mpm_core.cpp \
+       src/elrs/elrs_tx.cpp src/elrs/elrs_hw.c src/elrs/md5.c
+OBJS = $(patsubst src/%,$(BUILD)/%.o,$(SRCS)) $(BUILD)/uhd_ad9361/ad9361_device.cpp.o \
+       $(patsubst %,$(BUILD)/expresslrs/%.o,$(ELRS_UPSTREAM))
 
 all: $(TARGET).bin
 
@@ -72,6 +82,14 @@ $(BUILD)/%.cpp.o: src/%.cpp | $(BUILD)
 $(BUILD)/mpm/%.cpp.o: src/mpm/%.cpp $(BUILD)/version.h | $(BUILD)
 	@mkdir -p $(dir $@)
 	$(CXX) $(MPM_CXXFLAGS) -MMD -c $< -o $@
+
+$(BUILD)/elrs/%.cpp.o: src/elrs/%.cpp | $(BUILD)
+	@mkdir -p $(dir $@)
+	$(CXX) $(ELRS_CXXFLAGS) -MMD -c $< -o $@
+
+$(BUILD)/expresslrs/%.cpp.o: $(ELRS)/lib/%.cpp | $(BUILD)
+	@mkdir -p $(dir $@)
+	$(CXX) $(ELRS_CXXFLAGS) -MMD -c $< -o $@
 
 $(BUILD)/uhd_ad9361/%.cpp.o: $(UHD_AD9361)/%.cpp | $(BUILD)
 	@mkdir -p $(dir $@)
