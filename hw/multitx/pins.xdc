@@ -58,6 +58,8 @@ set_property -dict {PACKAGE_PIN K2 IOSTANDARD LVCMOS18 SLEW SLOW} [get_ports GPI
 set_property -dict {PACKAGE_PIN L1 IOSTANDARD LVCMOS18 SLEW SLOW} [get_ports GPIF_CTL12]
 set_property -dict {PACKAGE_PIN AB15 IOSTANDARD LVCMOS33} [get_ports FPGA_RXD0]
 set_property -dict {PACKAGE_PIN AA14 IOSTANDARD LVCMOS33} [get_ports FPGA_TXD0]
+# CN2 GPIO_0: PPM input (3.3 V only; pulled down so an open pin reads idle)
+set_property -dict {PACKAGE_PIN AA9 IOSTANDARD LVCMOS33 PULLDOWN TRUE} [get_ports FPGA_GPIO_0]
 set_property -dict {PACKAGE_PIN B15 IOSTANDARD LVCMOS33} [get_ports LED_RX1_inv]
 set_property -dict {PACKAGE_PIN E19 IOSTANDARD LVCMOS33} [get_ports LED_RX2_inv]
 set_property -dict {PACKAGE_PIN A15 IOSTANDARD LVCMOS33} [get_ports LED_TXRX1_TX_inv]

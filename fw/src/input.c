@@ -4,18 +4,25 @@
 #include "input.h"
 #include "irq.h"
 #include "mpm.h"
+#include "ppm.h"
 #include "radio.h"
 #include "timer.h"
 
-/* Handset input: Multiprotocol serial frames (what EdgeTX sends a Multi module)
- * that the PC writes into the mailbox over USB (tools/multi_link.py). The frames
- * take control when they arrive; console commands (mpm start / stop) take it
- * back. Without a frame for the timeout (Multiprotocol: 70 ms) the protocol is
- * paused, so the receiver goes to failsafe, and resumes with the next frame. */
+/* Handset input, from one of:
+ *  - USB: Multiprotocol serial frames (what EdgeTX sends a Multi module) that the
+ *    PC writes into the mailbox (tools/multi_link.py). They take control when they
+ *    arrive; console commands (mpm start / stop) take it back.
+ *  - PPM: a radio's trainer port on CN2 (ppm_in), selected with `input ppm`. The
+ *    channels come from it, the protocol is chosen on the console, as on a
+ *    Multiprotocol module in PPM mode.
+ * Without a frame for the timeout (Multiprotocol: 70 ms) the protocol is paused,
+ * so the receiver goes to failsafe, and resumes with the next frame. */
 
 #define DEFAULT_TIMEOUT_MS 70
 
-static int usb_mode, signal_ok, bad_proto;
+enum { IN_CONSOLE, IN_USB, IN_PPM };
+static int mode = IN_CONSOLE, signal_ok, bad_proto;
+static uint16_t ppm_seen;
 static uint32_t timeout_ms = DEFAULT_TIMEOUT_MS;
 static uint64_t last_frame;
 static uint32_t restarts;
@@ -33,12 +40,33 @@ void input_init(void)
 	mailbox.in_errors = 0;
 }
 
+/* mpm start / stop on the console: USB frames give up control (PPM keeps the
+ * channels: there the console picks the protocol anyway) */
 void input_console(void)
 {
-	usb_mode = 0;
+	if (mode == IN_USB)
+		input_select_console();
+}
+
+void input_select_console(void)
+{
+	mode = IN_CONSOLE;
 	signal_ok = 0;
 	bad_proto = 0;
 	mpm_pause(0);
+}
+
+int input_select_ppm(int falling)
+{
+	if (!ppm_present())
+		return -1;
+	ppm_enable(1, falling);
+	ppm_seen = ppm_frames();
+	mode = IN_PPM;
+	signal_ok = 0;
+	bad_proto = 0;
+	mpm_pause(1);               /* until the first frame */
+	return 0;
 }
 
 void input_set_timeout(uint32_t ms)
@@ -65,8 +93,8 @@ static void frame(const uint8_t *b, int len)
 {
 	struct mpm_model m;
 
-	if (!usb_mode) {
-		usb_mode = 1;
+	if (mode != IN_USB) {
+		mode = IN_USB;
 		mpm_serial_reset();     /* the first frame selects the model */
 	}
 	uint32_t msr = irq_save();
@@ -107,14 +135,33 @@ void input_poll(void)
 			frame(buf, (int)len);
 	}
 
-	if (usb_mode && signal_ok && timer_ticks() - last_frame > TIMER_MS(timeout_ms)) {
+	if (mode == IN_PPM && ppm_frames() != ppm_seen) {
+		uint16_t half_us[16];
+		ppm_seen = ppm_frames();
+		int n = ppm_channels(half_us);
+		uint32_t msr = irq_save();
+		mpm_set_ppm(half_us, n);
+		irq_restore(msr);
+		mailbox.in_frames++;
+		last_frame = timer_ticks();
+		if (!signal_ok) {
+			signal_ok = 1;
+			mpm_pause(0);
+		}
+	}
+
+	if (mode != IN_CONSOLE && signal_ok && timer_ticks() - last_frame > TIMER_MS(timeout_ms)) {
 		signal_ok = 0;
 		mpm_pause(1);
 	}
 
 	uint32_t st = 0;
-	if (usb_mode)
-		st |= IN_ST_USB | (signal_ok ? IN_ST_SIGNAL : IN_ST_PAUSED);
+	if (mode == IN_USB)
+		st |= IN_ST_USB;
+	if (mode == IN_PPM)
+		st |= IN_ST_PPM;
+	if (mode != IN_CONSOLE)
+		st |= signal_ok ? IN_ST_SIGNAL : IN_ST_PAUSED;
 	if (mpm_running())
 		st |= IN_ST_RUNNING;
 	if (mpm_binding())
@@ -127,13 +174,14 @@ void input_poll(void)
 
 void input_print_status(void)
 {
-	uint32_t ago = usb_mode && last_frame ? (uint32_t)((timer_ticks() - last_frame) / TIMER_MS(1)) : 0;
+	static const char *names[] = { "console", "usb", "ppm" };
+	uint32_t ago = mode != IN_CONSOLE && last_frame ? (uint32_t)((timer_ticks() - last_frame) / TIMER_MS(1)) : 0;
 
-	printf("input %s, timeout %lu ms, %lu frames, %lu errors, %lu protocol starts",
-	       !usb_mode ? "console" : signal_ok ? "usb" : "usb, no signal (paused)",
+	printf("input %s%s, timeout %lu ms, %lu frames, %lu errors, %lu protocol starts", names[mode],
+	       mode != IN_CONSOLE && !signal_ok ? ", no signal (paused)" : "",
 	       (unsigned long)timeout_ms, (unsigned long)mailbox.in_frames,
 	       (unsigned long)mailbox.in_errors, (unsigned long)restarts);
-	if (usb_mode)
+	if (mode != IN_CONSOLE)
 		printf(", last frame %lu ms ago", (unsigned long)ago);
 	if (bad_proto)
 		printf(", protocol not built in or failed to start");

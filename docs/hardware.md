@@ -38,6 +38,19 @@ and the community pin constraints are in [b220_reference.xdc](b220_reference.xdc
 | CN2 (14-pin, 1.25 mm) | `FPGA_UART_TX/RX` (pins 13/14 → FPGA AA14/AB15) and `FPGA_GPIO_0..7` |
 | MMCX | PPS / 10 MHz reference input |
 
+CN2, from the schematic (`reference/schematics/miniRev0.pdf`):
+
+| CN2 pin | Signal | FPGA | Used for |
+|---|---|---|---|
+| 1 | `FPGA_GPIO_0` | AA9 | **PPM input** (`ppm_in`, pulled down) |
+| 2, 3, 4 | `FPGA_GPIO_1..3` | AA10, AB10, AA11 | free |
+| 8, 9, 10, 11 | `FPGA_GPIO_4..7` | AB11, AB12, AA13, AB13 | free |
+| 13 | `FPGA_UART_TX` | AA14 | console UART out |
+| 14 | `FPGA_UART_RX` | AB15 | console UART in |
+| 5, 6, 7, 12 | no net label in the schematic | | find ground with a meter before wiring |
+
+All of these are 3.3 V LVCMOS and **not 5 V tolerant**.
+
 The FX3 is **not** wired to the FPGA's JTAG pins. Without a JTAG cable, all debugging
 goes through the USB debug bridge. A JTAG cable must support 1.8 V I/O (for example a
 Xilinx Platform Cable USB II clone).

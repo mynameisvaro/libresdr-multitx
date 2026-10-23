@@ -38,3 +38,6 @@ set_false_path -to [get_ports {CLK_40M_DAC_* CAT_RESETn CAT_EN_AGC CAT_SYNC CAT_
 set_false_path -from [get_ports {CAT_CTL_OUT[*] FPGA_RXD0}]
 
 set_property BITSTREAM.GENERAL.COMPRESS TRUE [current_design]
+
+# ---- PPM input: asynchronous, synchronised in ppm_in ----
+set_false_path -from [get_ports FPGA_GPIO_0]

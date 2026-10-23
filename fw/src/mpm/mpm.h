@@ -31,6 +31,11 @@ struct mpm_model {
 };
 int  mpm_serial_frame(const uint8_t *frame, int len, struct mpm_model *m);
 void mpm_serial_reset(void);             /* the next frame counts as a new model */
+/* PPM channel widths (0.5 us units) -> channels 1..n, as Multiprotocol maps
+ * its PPM input. Call with interrupts off. */
+void mpm_set_ppm(const uint16_t *half_us, int n);
+void mpm_set_ppm_range(int min_us, int max_us);   /* +-100% end points (default 988..2012) */
+void mpm_get_ppm_range(int *min_us, int *max_us);
 void mpm_list(void);
 int  mpm_proto_by_name(const char *name);   /* name or number -> protocol, -1 */
 const uint8_t *mpm_hopping_table(int *n);

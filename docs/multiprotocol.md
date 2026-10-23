@@ -204,8 +204,37 @@ the console taking control back. Streaming frames made no callback late (worst
 2 µs).
 
 Not yet: failsafe frames (Multiprotocol's `FAILSAFE_ENABLE` isn't built in, so
-they are skipped), telemetry back to the PC, and the other inputs (PPM from a
-FlySky trainer port on the GPIO pins, serial on CN2's UART).
+they are skipped), telemetry back to the PC, and serial frames on CN2's UART.
+
+## Handset input from a radio (PPM)
+
+A radio's trainer port (PPM out) on **CN2 pin 1** (`FPGA_GPIO_0`, 3.3 V) drives
+the channels, as on a Multiprotocol module in PPM mode: the protocol is chosen on
+the console and the radio moves the sticks.
+
+```
+mtx> input ppm                 # channels from PPM (rising edges; "input ppm falling" for inverted PPM)
+mtx> mpm start frskyx          # the protocol, from the console
+mtx> ppm                       # what the decoder sees: frames, channel widths in us
+mtx> input range 1000 2000     # the radio's -100%/+100% widths (default 988 2012, Multiprotocol's TX_ER9X)
+mtx> input console             # back to console channels
+```
+
+`hw/ip/ppm_in` applies Multiprotocol's own rules: an interval under 800 us spoils
+the frame, one over 2200 us is the sync, a frame needs 4 to 16 channels. The
+firmware maps the widths with Multiprotocol's `map16b` arithmetic. Without frames
+for the input timeout (70 ms) the protocol pauses (receiver failsafe) and resumes
+with the next frame.
+
+**Wiring:** the trainer port's signal to CN2 pin 1 through a 1 kΩ series
+resistor, and its ground to the board's ground. The FPGA pin is 3.3 V only: check
+the radio's PPM level first and use a divider (for example 1 kΩ / 2 kΩ) if it is
+higher.
+
+`ppm_in` has a built-in PPM generator that can replace the pin, so the whole path
+is checked without a radio: `ppm test 1000 1500 2000 ...` sets its channel widths,
+`ppm test off` returns to the pin. `tools/ppm_check.py` uses it. (Status: the
+testbench passes 11/11; the board check and a real radio are still to do.)
 
 ## Testing with a FrSky receiver
 

@@ -15,6 +15,7 @@
 #define ADC_CAPTURE_BASE 0x44000000u
 #define GFSK_TX_BASE     0x44040000u   /* GFSK modulator + channel NCO */
 #define LORA_TX_BASE     0x44050000u   /* LoRa chirp modulator + channel NCO */
+#define PPM_IN_BASE      0x44060000u   /* PPM input (CN2 GPIO_0) */
 #define AD9361_SPI_BASE  0x44A00000u   /* AXI Quad SPI */
 #define AXI_AD9361_BASE  0x79020000u   /* ADI axi_ad9361 core */
 

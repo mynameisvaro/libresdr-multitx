@@ -14,6 +14,7 @@
 #include "hw.h"
 #include "input.h"
 #include "lora.h"
+#include "ppm.h"
 #include "irq.h"
 #include "rf.h"
 #include "shell.h"
@@ -653,6 +654,63 @@ static int cmd_input(int argc, char **argv)
 		input_set_timeout(num(argv[2]));
 		return 0;
 	}
+	if (!strcmp(argv[1], "console")) {
+		input_select_console();
+		return 0;
+	}
+	if (!strcmp(argv[1], "ppm")) {
+		/* input ppm [falling]: channels from a radio's trainer port on CN2 */
+		if (input_select_ppm(argc > 2 && !strcmp(argv[2], "falling")))
+			printf("no ppm_in in this bitstream\n");
+		return 0;
+	}
+	if (argc > 3 && !strcmp(argv[1], "range")) {
+		/* input range MIN MAX: PPM pulse widths for -100% / +100% (default 988 2012) */
+		mpm_set_ppm_range(num(argv[2]), num(argv[3]));
+		return 0;
+	}
+	return -1;
+}
+
+/* Runs live: reads the decoder; the generator is plain register writes. */
+static int cmd_ppm(int argc, char **argv)
+{
+	uint16_t v[16];
+
+	if (!ppm_present()) {
+		printf("no ppm_in in this bitstream\n");
+		return 0;
+	}
+	if (argc == 1) {
+		int lo, hi, n = ppm_channels(v);
+		mpm_get_ppm_range(&lo, &hi);
+		printf("decoder %s, source %s, pin %d, %u frames, %d channels:",
+		       ppm_enabled() ? "on" : "off", ppm_testing() ? "test generator" : "pin",
+		       ppm_pin_level(), (unsigned)ppm_frames(), n);
+		for (int i = 0; i < n; i++)
+			printf(" %u%s", v[i] / 2, v[i] & 1 ? ".5" : "");
+		printf(" us (+-100%% = %d..%d)\n", lo, hi);
+		return 0;
+	}
+	if (argc > 2 && !strcmp(argv[1], "test")) {
+		/* ppm test US1 US2 ... [frame US] | ppm test off */
+		if (!strcmp(argv[2], "off")) {
+			ppm_test(0, NULL, 0);
+			return 0;
+		}
+		int n = 0;
+		uint32_t frame = 22500;
+		for (int i = 2; i < argc; i++) {
+			if (!strcmp(argv[i], "frame") && i + 1 < argc)
+				frame = num(argv[++i]);
+			else if (n < 16)
+				v[n++] = num(argv[i]);
+		}
+		ppm_test(n, v, frame);
+		if (!ppm_enabled())
+			ppm_enable(1, 0);
+		return 0;
+	}
 	return -1;
 }
 
@@ -688,7 +746,9 @@ static const struct shell_cmd cmds[] = {
 	  "                             rx HEX (queue a received packet)", cmd_a7105, SHELL_LIVE },
 	{ "lora",    "[SUBCMD ...]",   "LoRa frames: cfg SF BW CR [crc|nocrc] [implicit|explicit] [pre N]\n"
 	  "                             [sync HEX] [iqinv|iqnorm] [ldro] | send FREQ HEX [DBM]", cmd_lora, 0 },
-	{ "input",   "[timeout MS]",   "handset input from the PC (Multi serial frames over USB)", cmd_input, SHELL_LIVE },
+	{ "input",   "[SUBCMD ...]",   "handset input: status | console | ppm [falling] | timeout MS |\n"
+	  "                             range MIN MAX (PPM us for -/+100%)", cmd_input, SHELL_LIVE },
+	{ "ppm",     "[test US... [frame US] | test off]", "PPM decoder (CN2 GPIO_0) and its test generator", cmd_ppm, SHELL_LIVE },
 	{ "reboot",  "",               "restart the firmware",            cmd_reboot, 0 },
 };
 

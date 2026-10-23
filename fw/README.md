@@ -114,7 +114,8 @@ Code called from a protocol callback must not print.
 | [`radio.c`](src/radio.c) | radio layer: LO slices with fast retunes, NCO offset, modem cache, power, front end |
 | [`cc2500.c`](src/cc2500.c) | virtual CC2500: SPI slave with registers, strobes, FIFO; builds and sends packets |
 | [`a7105.c`](src/a7105.c) | virtual A7105: the same for FlySky, plus settable CRC/FEC coding and an RX FIFO filled from the console |
-| [`input.c`](src/input.c) | handset input: Multi serial frames from the mailbox, link-loss pause |
+| [`input.c`](src/input.c) | handset input: Multi serial frames from the mailbox (USB) or PPM (`ppm_in`), link-loss pause |
+| [`ppm.c`](src/ppm.c) | `ppm_in` driver: decoder, test generator |
 | [`mpm/`](src/mpm) | Multiprotocol port: Arduino shim, core (globals, start-up, scheduler on the timer alarm) |
 | [`hw.h`](src/hw.h) | address map and register access helpers |
 

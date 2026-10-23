@@ -17,6 +17,7 @@
 #define FLYSKY_A7105_INO
 #define AFHDS2A_A7105_INO
 #define AETR                    // channel order, Multiprotocol's default (_Config.h)
+#define TX_ER9X                 // PPM end points 988..2012 us, Multiprotocol's default
 
 #include "mpm_arduino.h"
 #include "Multiprotocol.h"
@@ -423,6 +424,41 @@ extern "C" int mpm_serial_frame(const uint8_t *b, int len, struct mpm_model *m)
 	if (len == 28 && protocol == PROTO_FRSKYX)
 		binding_idx = b[27];            // FrSky X bind options (telemetry, CH1-8 / 9-16)
 	return ret;
+}
+
+// PPM channel widths (0.5 us units) -> channels, as Multiprotocol does for its
+// PPM input: map16b(PPM_MIN_100..PPM_MAX_100 -> CHANNEL_MIN_100..MAX_100),
+// integer maths, clamped to the +-125% range (Multiprotocol.ino, Update_All,
+// ENABLE_PPM). The end points default to TX_ER9X's and can be set per radio.
+static int16_t ppm_min_100 = PPM_MIN_100, ppm_max_100 = PPM_MAX_100;
+
+extern "C" void mpm_set_ppm_range(int min_us, int max_us)
+{
+	ppm_min_100 = min_us;
+	ppm_max_100 = max_us;
+}
+
+extern "C" void mpm_get_ppm_range(int *min_us, int *max_us)
+{
+	*min_us = ppm_min_100;
+	*max_us = ppm_max_100;
+}
+
+extern "C" void mpm_set_ppm(const uint16_t *half_us, int n)
+{
+	for (int i = 0; i < n && i < NUM_CHN; i++) {
+		long y = (long)(CHANNEL_MAX_100 - CHANNEL_MIN_100) * ((int16_t)half_us[i] - ppm_min_100 * 2);
+		int16_t val = (int16_t)(y / ((ppm_max_100 - ppm_min_100) * 2) + CHANNEL_MIN_100);
+		if (val & 0x8000)
+			val = CHANNEL_MIN_125;
+		else if (val > CHANNEL_MAX_125)
+			val = CHANNEL_MAX_125;
+		Channel_data[i] = val;
+	}
+	Channel_AUX = 0;
+	for (uint8_t i = 0; i < 8; i++)
+		if (Channel_data[CH5 + i] > CHANNEL_SWITCH)
+			Channel_AUX |= 1 << i;
 }
 
 extern "C" int mpm_binding(void)

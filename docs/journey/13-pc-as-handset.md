@@ -131,6 +131,34 @@ tunnel the pad was sampled once per frame (about once a second), and the 0.3 s t
 fell between two samples. The fix counts SDL's button-press **events** instead of
 comparing samples, so no tap is lost at any frame rate. Second run: 8/8.
 
+## A radio on the trainer port (PPM)
+
+Sometimes the handset will be a real radio: a FlySky, which can't speak Multi
+serial, only PPM out of its trainer port. PPM is a pulse at the start of each
+channel slot; the time from one pulse to the next is the channel's value (1000 to
+2000 µs), and a longer gap marks the start of a frame.
+
+Measuring microseconds is a job for the FPGA, not the CPU, so
+[`ppm_in`](../../hw/ip/ppm_in/ppm_in.v) times the intervals in 0.5 µs steps and
+keeps the last complete frame for the firmware. The rules (what counts as a
+glitch, what counts as the sync, how many channels make a frame) are copied from
+Multiprotocol's PPM interrupt, and the firmware converts widths to channel values
+with Multiprotocol's own integer maths, so a radio behaves the same as on a
+Multiprotocol module.
+
+The radio was at home. So the block got a **built-in PPM generator** that the
+firmware can switch in place of the pin. That isn't only for this test: it means
+the decoder, the firmware and the link-loss pause can be checked on any board,
+any time, without a cable. The testbench drives the pin itself (both polarities,
+a glitch, a frame with too few channels, 16 channels at the extremes) and the
+generator (11 checks).
+
+Two things the testbench taught: a frame is only complete when the **next**
+sync edge arrives (the sync gap has to end before you know it was one), and the
+first edge after power-up can't be trusted, since nothing says how long the line
+was idle before it. Multiprotocol behaves the same way; the first version of the
+test didn't.
+
 ## What it led to
 
 The PC can now fly the board, from a gamepad. Next on this path: PPM from the FlySky's trainer

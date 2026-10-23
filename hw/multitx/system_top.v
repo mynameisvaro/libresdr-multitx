@@ -38,9 +38,10 @@ module system_top (
   output wire        GPIF_CTL11, GPIF_CTL12,
   input  wire        GPIF_CTL4, GPIF_CTL5, GPIF_CTL6, GPIF_CTL8, GPIF_CTL9,
 
-  // debug UART (accessory connector CN2)
+  // debug UART and PPM input (accessory connector CN2)
   input  wire        FPGA_RXD0,
   output wire        FPGA_TXD0,
+  input  wire        FPGA_GPIO_0,
 
   // 40 MHz TCXO tuning DAC
   output wire        CLK_40M_DAC_nSYNC,
@@ -117,6 +118,7 @@ module system_top (
 
     .uart_rxd         (FPGA_RXD0),
     .uart_txd         (FPGA_TXD0),
+    .ppm_in           (FPGA_GPIO_0),
 
     .gpif_ifclk       (IFCLK),
     .gpif_d_i         (gpif_d_i),

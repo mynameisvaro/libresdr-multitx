@@ -129,7 +129,7 @@ Running the board on a remote machine over USB/IP: [docs/remote-usb.md](docs/rem
 - [x] Protocol callbacks on a timer interrupt: the console can't delay a packet ([journey ch. 12](docs/journey/12-timer-interrupt.md))
 - [x] Handset input from the PC: Multiprotocol serial frames over USB ([`multi_link.py`](tools/multi_link.py), [docs](docs/multiprotocol.md#handset-input-from-the-pc))
 - [x] A gamepad on the PC as the sticks ([`multi_link.py --gamepad`](tools/gamepad.py))
-- [ ] More handset inputs: PPM from a FlySky trainer port (GPIO)
+- [ ] PPM input from a radio's trainer port (CN2 pin 1): built and simulated, board check pending (`multitx_p5_ppm.bin`, `tools/ppm_check.py`)
 - [ ] GFSK receive path (telemetry, bind replies)
 - [ ] NRF24L01, CYRF6936 (DSSS), SX1276 (LoRa) shims
 - [x] LoRa physical layer: model checked symbol for symbol on real SX1276 recordings, `lora_tx` chirp modulator (simulated) ([docs/lora.md](docs/lora.md))

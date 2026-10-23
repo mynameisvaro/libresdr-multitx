@@ -22,6 +22,7 @@ board running a MultiTX bitstream.
 | [`multi_link.py`](multi_link.py) | the PC as the handset: streams Multiprotocol serial frames (protocol, flags, option, 16 channels) to the firmware over USB; also importable (`MultiLink`, `Frame`) |
 | [`gamepad.py`](gamepad.py) | a gamepad as the sticks and switches for `multi_link.py --gamepad` (pygame; mapping, toggles, expo); run alone it shows your pad's input names |
 | [`test_gamepad.py`](test_gamepad.py) | unit tests for the gamepad mapping (no hardware) |
+| [`ppm_check.py`](ppm_check.py) | checks the PPM input with `ppm_in`'s built-in generator: widths, Multiprotocol's mapping in a running protocol, pause and resume |
 | [`input_check.py`](input_check.py) | checks the handset input path: protocol start from a frame, exact channels, bind flag, link-loss pause and resume, protocol switch |
 | [`sched_check.py`](sched_check.py) | runs a protocol while loading the console (busy, and with the output ring full) and checks that no callback is late |
 | [`sbus_tune.py`](sbus_tune.py) | logs the SBUS monitor from its serial port and sweeps the FrSky frequency fine tune (`mpm option`) against the lost-frame rate |

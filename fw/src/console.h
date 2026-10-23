@@ -19,6 +19,7 @@
 #define IN_ST_RUNNING     (1u << 3)      /* a protocol is running */
 #define IN_ST_BINDING     (1u << 4)
 #define IN_ST_BAD_PROTO   (1u << 5)      /* the frame's protocol isn't built in */
+#define IN_ST_PPM         (1u << 6)      /* channels from PPM (CN2) */
 
 /* Layout shared with tools/usbdbg.py. Counters are free running; each one is
  * written by one side only (fw = firmware, host = PC). */
