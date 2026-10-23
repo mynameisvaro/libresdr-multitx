@@ -61,4 +61,4 @@ clock, register, AXI, block design, timing) with examples from this repository.
 | 2026-10-23 00:25 | Link measured: exact channels, 0.74% frames lost | `bfa6b2d` |
 | 2026-10-23 | Protocol callbacks on a timer interrupt: worst lateness 58.8 ms → 2 µs | `bc1bebd` |
 | 2026-10-23 | No slow work inside callbacks: longest 21 ms → 1.5 ms | `61d3f92` |
-| 2026-10-23 | Handset input from the PC: Multi serial frames over USB | (next commit) |
+| 2026-10-23 | Handset input from the PC: Multi serial frames over USB | `5f8649d` |
