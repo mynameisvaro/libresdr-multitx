@@ -11,8 +11,8 @@ uint8_t a7105_spi(uint8_t mosi);        /* one SPI byte; returns MISO */
 void    a7105_poll(void);               /* end of TX, queued RX packet (call often) */
 
 /* A packet "received" off the air: it lands in the RX FIFO the next time the
- * chip is in RX (it waits there if the chip is busy). The receive path is not
- * emulated yet, so the host feeds packets it decoded from captures. */
+ * chip is in RX (it waits there if the chip is busy). With gfsk_rx in the
+ * bitstream the chip also receives for real; this is for tests and replays. */
 int     a7105_rx_queue(const uint8_t *data, int len);
 
 /* On-air coding the data sheet leaves open: the CRC-16 parameters and the
@@ -41,6 +41,13 @@ struct a7105_info {
 	int      last_bits;
 	int      last_len;
 	uint8_t  last_pkt[40];      /* last payload as written to the FIFO */
+	/* receive (gfsk_rx) */
+	uint32_t rx_arms;           /* RX entered with the receiver armed */
+	uint32_t rx_crc_errors, rx_fec_errors;
+	double   rx_offset_hz;      /* carrier offset of the last packet (rough) */
+	uint32_t rx_level;
+	int      rx_len;
+	uint8_t  last_rx[40];       /* last packet received, as it went into the FIFO */
 };
 const struct a7105_info *a7105_get_info(void);
 const uint8_t *a7105_regs(void);

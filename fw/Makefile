@@ -58,7 +58,7 @@ LDLIBS  = -Wl,--start-group -lstdc++ -lc -lm -lgcc -Wl,--end-group
 
 SRCS = src/crt0.S src/syscalls.c src/main.c src/console.c src/irq.c src/timer.c \
        src/gpio.c src/ad9361_spi.c src/axi_ad9361.c src/gfsk.c src/radio.c \
-       src/cc2500.c src/a7105.c src/lora_code.c src/lora.c src/ppm.c src/input.c src/shell.c src/rf.cpp src/mpm/mpm_core.cpp \
+       src/cc2500.c src/a7105.c src/gfsk_rx.c src/lora_code.c src/lora.c src/ppm.c src/input.c src/shell.c src/rf.cpp src/mpm/mpm_core.cpp \
        src/elrs/elrs_tx.cpp src/elrs/elrs_hw.c src/elrs/md5.c
 OBJS = $(patsubst src/%,$(BUILD)/%.o,$(SRCS)) $(BUILD)/uhd_ad9361/ad9361_device.cpp.o \
        $(patsubst %,$(BUILD)/expresslrs/%.o,$(ELRS_UPSTREAM))

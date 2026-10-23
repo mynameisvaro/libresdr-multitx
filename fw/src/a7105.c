@@ -15,9 +15,11 @@
  *    Gaussian filter (BT 0.7) from FS, power from TX test (28h)
  *  - after TX, and after a packet is received, the chip goes back to standby
  *    (the data sheet's auto-back)
- *  - receive: the receiver is not emulated. In RX the chip waits (TRER = 1)
- *    until a packet is queued with a7105_rx_queue(), which lands in the RX
- *    FIFO with a good CRC.
+ *  - receive: in RX the receiver (gfsk_rx) looks for the ID code on the
+ *    channel, and the bits after it are decoded as the transmit side codes
+ *    them (whitening, FEC, CRC); CRCF/FECF report the result and the chip
+ *    goes back to standby. A packet queued with a7105_rx_queue() (console,
+ *    tests) lands in the RX FIFO with a good CRC instead.
  *
  * The data sheet does not give the CRC-16 initial value or reflection, nor the
  * bit layout of the Hamming code words, so those are settable (struct
@@ -30,6 +32,7 @@
 
 #include "a7105.h"
 #include "gfsk.h"
+#include "gfsk_rx.h"
 #include "radio.h"
 
 #define FXTAL 16e6
@@ -85,6 +88,7 @@ static int     txlen, rxrd;
 static uint8_t state = S_STANDBY, status;    /* status: CRCF/FECF from the last RX */
 static uint8_t rxq[FIFO_SIZE];
 static int     rxq_len;
+static int     rx_armed;
 
 /* SPI frame state */
 static int     selected, header_seen, rw_read, nbyte;
@@ -249,10 +253,18 @@ static void transmit(void)
 	memcpy(info.last_pkt, body, info.last_len);
 }
 
+static void receive(void);
+static void listen(void);
+
 void a7105_poll(void)
 {
 	if (state == S_TX && !radio_tx_busy())
 		state = S_STANDBY;
+	if (state == S_RX && rx_armed && gfsk_rx_done()) {
+		rx_armed = 0;
+		receive();
+		state = S_STANDBY;
+	}
 	if (state == S_RX && rxq_len) {
 		memset(rxfifo, 0, sizeof(rxfifo));
 		memcpy(rxfifo, rxq, rxq_len);
@@ -286,10 +298,125 @@ static void strobe(uint8_t s)
 	case S_RST_RDPTR: rxrd = 0; break;
 	default:
 		/* a packet in flight completes (the modulator can't stop mid-packet) */
-		if (state != S_TX)
+		if (state != S_TX) {
+			uint8_t was = state;
 			state = s & 0xF0;
+			if (state == S_RX && was != S_RX)
+				listen();
+			else if (state != S_RX && rx_armed) {
+				radio_rx_stop();
+				rx_armed = 0;
+			}
+		}
 		break;
 	}
+}
+
+/* The packet as transmit() would send it: preamble, ID code, then the bits
+ * gfsk_rx keeps (payload and CRC, FEC coded if on, whitened if on). */
+static int rx_body_len(void)
+{
+	int len = regs[FIFOI] + 1;
+	if (len > FIFO_SIZE)
+		len = FIFO_SIZE;
+	return len + ((regs[CODE_I] & 0x08) ? 2 : 0);
+}
+
+static void listen(void)
+{
+	if (!gfsk_rx_present() || !radio_running())
+		return;
+	uint8_t code = regs[CODE_I];
+	struct gfsk_rx_cfg c;
+	c.baud = data_rate();
+	if (code & 0x04) {
+		c.sync = (uint32_t)id[0] << 24 | (uint32_t)id[1] << 16 | (uint32_t)id[2] << 8 | id[3];
+	} else {                                /* 2-byte ID: preamble before it */
+		uint8_t pre = (id[0] & 0x80) ? 0xAA : 0x55;
+		c.sync = (uint32_t)pre << 24 | (uint32_t)pre << 16 | (uint32_t)id[0] << 8 | id[1];
+	}
+	c.mask = 0xFFFFFFFF;
+	c.maxerr = 2;
+	c.invert = 0;
+	c.nbits = rx_body_len() * ((code & 0x10) ? 14 : 8);
+	if (!radio_rx(rf_freq(), &c)) {
+		rx_armed = 1;
+		info.rx_arms++;
+	}
+}
+
+static int get_bits(const uint8_t *b, int *pos, int n)
+{
+	int v = 0;
+	while (n--) {
+		v = v << 1 | ((b[*pos >> 3] >> (7 - (*pos & 7))) & 1);
+		(*pos)++;
+	}
+	return v;
+}
+
+/* nearest code word: the nibble, and whether it needed more than one fix */
+static int fec_decode(int cw, int *bad)
+{
+	int best = 0, dist = 8;
+	for (int n = 0; n < 16; n++) {
+		int d = __builtin_popcount((cw ^ coding.fec[n]) & 0x7F);
+		if (d < dist) {
+			dist = d;
+			best = n;
+		}
+	}
+	if (dist > 1)
+		*bad = 1;
+	return best;
+}
+
+static void receive(void)
+{
+	uint8_t raw[GFSK_RX_BUF_BYTES], body[FIFO_SIZE + 2];
+	struct gfsk_rx_result r;
+	uint8_t code = regs[CODE_I];
+	int n = rx_body_len();
+
+	gfsk_rx_read(raw, sizeof(raw), &r);
+	int nbits = n * ((code & 0x10) ? 14 : 8);
+	if (code & 0x20) {                       /* undo the PN7 whitening */
+		uint8_t pn = regs[CODE_III] & 0x7F;
+		if (!pn)
+			pn = 0x7F;
+		for (int i = 0; i < nbits; i++) {
+			if (pn & 0x40)
+				raw[i >> 3] ^= 0x80 >> (i & 7);
+			pn = ((pn << 1) | (((pn >> 6) ^ (pn >> 3)) & 1)) & 0x7F;
+		}
+	}
+	int pos = 0, fec_bad = 0;
+	for (int i = 0; i < n; i++) {
+		if (code & 0x10) {
+			int a = fec_decode(get_bits(raw, &pos, 7), &fec_bad);
+			int b = fec_decode(get_bits(raw, &pos, 7), &fec_bad);
+			body[i] = coding.fec_low_first ? (uint8_t)(b << 4 | a) : (uint8_t)(a << 4 | b);
+		} else {
+			body[i] = (uint8_t)get_bits(raw, &pos, 8);
+		}
+	}
+	int len = n - ((code & 0x08) ? 2 : 0);
+	int crc_bad = 0;
+	if (code & 0x08) {
+		uint16_t crc = crc16(body, len);
+		crc_bad = body[len] != (crc >> 8) || body[len + 1] != (crc & 0xFF);
+	}
+	memset(rxfifo, 0, sizeof(rxfifo));
+	memcpy(rxfifo, body, len);
+	rxrd = 0;
+	status = (crc_bad ? CRCF : 0) | (fec_bad ? FECF : 0);
+	info.rx_packets++;
+	info.rx_crc_errors += crc_bad;
+	info.rx_fec_errors += fec_bad;
+	info.rx_offset_hz = r.offset_hz;
+	info.rx_level = r.level;
+	info.rx_len = len < (int)sizeof(info.last_rx) ? len : (int)sizeof(info.last_rx);
+	memcpy(info.last_rx, body, info.rx_len);
 }
 
 static uint8_t read_reg(uint8_t a)

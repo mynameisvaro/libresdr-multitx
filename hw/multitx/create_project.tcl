@@ -28,6 +28,7 @@ add_files -norecurse [concat \
         $hw/ip/lora_tx/lora_tx.v \
         $hw/ip/tx_select/tx_select.v \
         $hw/ip/ppm_in/ppm_in.v \
+        $hw/ip/gfsk_rx/gfsk_rx.v \
         $hw/ip/tcxo_dac/DACx311_auto_spi.v \
         $here/system_top.v]]
 update_compile_order -fileset sources_1

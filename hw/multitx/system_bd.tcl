@@ -16,6 +16,7 @@
 #   gpio_ctrl : AD9361 reset/AGC/sync/CTRL_IN, ENABLE/TXNRX request, user LED
 #   gpio_dac  : 40 MHz TCXO tuning word ──► tcxo_dac (SPI to the board's DAC)
 #   ppm_in    : PPM from a radio's trainer port on CN2 GPIO_0
+#   gfsk_rx   : GFSK receiver on the RX samples (sync word -> bits)
 #
 # Address map: see docs/architecture.md (kept in sync with assign_addresses below).
 
@@ -284,6 +285,13 @@ wire axi_ad9361/l_clk        lora_tx/dac_clk
 wire axi_ad9361/dac_valid_i0 lora_tx/dac_valid
 wire lora_tx/irq             sys_irq/In4
 
+# GFSK receiver (telemetry, bind replies): RX samples -> sync word -> bits
+add_module gfsk_rx gfsk_rx
+wire axi_ad9361/l_clk        gfsk_rx/adc_clk
+wire axi_ad9361/adc_valid_i0 gfsk_rx/adc_valid
+wire axi_ad9361/adc_data_i0  gfsk_rx/adc_data_i
+wire axi_ad9361/adc_data_q0  gfsk_rx/adc_data_q
+
 # PPM input (a radio's trainer port on CN2 GPIO_0), decoded like Multiprotocol
 add_module ppm_in ppm_in
 wire_port ppm_in ppm_in/ppm_pin
@@ -313,6 +321,7 @@ set slaves {
   gfsk_tx/s_axi
   lora_tx/s_axi
   ppm_in/s_axi
+  gfsk_rx/s_axi
 }
 add_ip axi_cpu_interconnect xilinx.com:ip:axi_interconnect:2.1 \
   [list CONFIG.NUM_SI 2 CONFIG.NUM_MI [llength $slaves]]
@@ -331,7 +340,7 @@ wire sys_clkgen/clk_out1 axi_cpu_interconnect/ACLK axi_cpu_interconnect/S00_ACLK
 wire sys_rstgen/interconnect_aresetn axi_cpu_interconnect/ARESETN
 wire sys_rstgen/peripheral_aresetn axi_cpu_interconnect/S00_ARESETN axi_cpu_interconnect/S01_ARESETN
 
-foreach c {code_ram_axi sys_uart sys_intc sys_timer gpio_fe gpio_ctrl gpio_dac ad9361_spi axi_ad9361 adc_capture gfsk_tx lora_tx ppm_in} {
+foreach c {code_ram_axi sys_uart sys_intc sys_timer gpio_fe gpio_ctrl gpio_dac ad9361_spi axi_ad9361 adc_capture gfsk_tx lora_tx ppm_in gfsk_rx} {
   wire sys_clkgen/clk_out1            $c/s_axi_aclk
   wire sys_rstgen/peripheral_aresetn $c/s_axi_aresetn
 }
@@ -361,6 +370,7 @@ place adc_capture  0x44000000 128K DU
 place gfsk_tx      0x44040000 64K  DU
 place lora_tx      0x44050000 64K  DU
 place ppm_in       0x44060000 64K  DU
+place gfsk_rx      0x44070000 64K  DU
 place ad9361_spi   0x44A00000 64K  DU
 place axi_ad9361   0x79020000 64K  DU
 

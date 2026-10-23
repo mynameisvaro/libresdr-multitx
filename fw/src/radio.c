@@ -3,6 +3,7 @@
 #include <stdio.h>
 
 #include "gfsk.h"
+#include "gfsk_rx.h"
 #include "gpio.h"
 #include "hw.h"
 #include "lora.h"
@@ -73,8 +74,10 @@ int radio_start(void)
 	 * calibrations after a retune of more than 100 MHz); from here on the
 	 * packets only need fast retunes */
 	double actual;
-	if (rf_tune(RF_TX, band_hz, &actual) || rf_tune(RF_RX, band_hz, NULL))
+	double actual_rx;
+	if (rf_tune(RF_TX, band_hz, &actual) || rf_tune(RF_RX, band_hz, &actual_rx))
 		return -1;
+	stats.rx_lo_hz = actual_rx;
 	cur_modem.baud = 0;              /* force a modem reload */
 	cur_gain = -1;
 	lo_hz = band_hz;
@@ -115,11 +118,12 @@ int radio_set_band(double hz)
 	if (!running)
 		return 0;
 	/* a full tune: the driver runs its calibrations for the new band */
-	double actual;
-	if (rf_tune(RF_TX, band_hz, &actual) || rf_tune(RF_RX, band_hz, NULL))
+	double actual, actual_rx;
+	if (rf_tune(RF_TX, band_hz, &actual) || rf_tune(RF_RX, band_hz, &actual_rx))
 		return -1;
 	lo_hz = band_hz;
 	stats.lo_hz = actual;
+	stats.rx_lo_hz = actual_rx;
 	return 0;
 }
 
@@ -146,7 +150,7 @@ static int prepare(double freq_hz, double dbm, double *offset)
 		double actual;
 		if (rf_fast_tune(RF_TX, want, &actual, NULL, NULL, NULL))
 			return -1;
-		if (rx_follow && rf_fast_tune(RF_RX, want, NULL, NULL, NULL, NULL))
+		if (rx_follow && rf_fast_tune(RF_RX, want, &stats.rx_lo_hz, NULL, NULL, NULL))
 			return -1;
 		lo_hz = want;
 		stats.lo_hz = actual;
@@ -199,6 +203,29 @@ int radio_tx(double freq_hz, const struct radio_modem *m, double dbm,
 	gfsk_channel(offset);
 	capture_start(freq_hz);
 	return gfsk_send(data, nbits);
+}
+
+int radio_rx(double freq_hz, const struct gfsk_rx_cfg *c)
+{
+	if (!running)
+		return -1;
+	double offset = freq_hz - stats.rx_lo_hz;
+	if (fabs(offset) > slice / 2) {
+		double want = slice_lo(freq_hz);
+		if (rf_fast_tune(RF_RX, want, &stats.rx_lo_hz, NULL, NULL, NULL))
+			return -1;
+		stats.retunes++;
+		offset = freq_hz - stats.rx_lo_hz;
+	}
+	if (gfsk_rx_arm(rate, offset, c))
+		return -1;
+	stats.rx_arms++;
+	return 0;
+}
+
+void radio_rx_stop(void)
+{
+	gfsk_rx_stop();
 }
 
 int radio_tx_lora(double freq_hz, const struct lora_cfg *c, double dbm,

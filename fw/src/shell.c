@@ -9,6 +9,7 @@
 #include "cc2500.h"
 #include "elrs.h"
 #include "gfsk.h"
+#include "gfsk_rx.h"
 #include "mpm.h"
 #include "radio.h"
 #include "gpio.h"
@@ -528,6 +529,13 @@ static int cmd_a7105(int argc, char **argv)
 		       (unsigned long)a->rx_packets, a->last_len);
 		for (int i = 0; i < a->last_len; i++)
 			printf(" %02x", a->last_pkt[i]);
+		printf("\nreceive: %s, %lu times armed, %lu CRC errors, %lu FEC errors, offset %+.1f kHz, "
+		       "level %lu\nlast received (%d bytes):", gfsk_rx_present() ? "gfsk_rx" : "no gfsk_rx",
+		       (unsigned long)a->rx_arms, (unsigned long)a->rx_crc_errors,
+		       (unsigned long)a->rx_fec_errors, a->rx_offset_hz / 1e3, (unsigned long)a->rx_level,
+		       a->rx_len);
+		for (int i = 0; i < a->rx_len; i++)
+			printf(" %02x", a->last_rx[i]);
 		printf("\n");
 		a7105_print_coding();
 		return 0;
@@ -775,6 +783,50 @@ static int cmd_elrs(int argc, char **argv)
 	return 0;
 }
 
+static int cmd_grx(int argc, char **argv)
+{
+	if (!gfsk_rx_present()) {
+		printf("no gfsk_rx in this bitstream\n");
+		return 0;
+	}
+	if (argc == 1) {
+		/* grx: status, and the bits kept (hex) when a packet is in */
+		uint8_t b[GFSK_RX_BUF_BYTES];
+		struct gfsk_rx_result r;
+		int done = gfsk_rx_done();
+		printf("%s", done ? "done" : gfsk_rx_searching() ? "searching" : "idle");
+		if (done) {
+			int n = gfsk_rx_read(b, sizeof(b), &r);
+			printf(", sync errors %d, offset %+.1f kHz, level %lu, tstamp %lu\n", r.syncerr,
+			       r.offset_hz / 1e3, (unsigned long)r.level, (unsigned long)r.tstamp);
+			for (int i = 0; i < n; i++)
+				printf("%02x", b[i]);
+		}
+		printf("\n");
+		return 0;
+	}
+	if (!strcmp(argv[1], "arm") && argc > 5) {
+		/* grx arm FREQ BAUD SYNC NBITS [MAXERR [MASK]] */
+		struct gfsk_rx_cfg c = {
+			.baud = strtod(argv[3], NULL), .sync = strtoul(argv[4], NULL, 16),
+			.mask = argc > 7 ? strtoul(argv[7], NULL, 16) : 0xFFFFFFFF,
+			.maxerr = argc > 6 ? (int)num(argv[6]) : 2, .invert = 0, .nbits = (int)num(argv[5]),
+		};
+		if (!radio_running() && radio_start()) {
+			printf("radio start failed\n");
+			return 0;
+		}
+		if (radio_rx(strtod(argv[2], NULL), &c))
+			printf("arm failed\n");
+		return 0;
+	}
+	if (!strcmp(argv[1], "stop")) {
+		radio_rx_stop();
+		return 0;
+	}
+	return -1;
+}
+
 static int cmd_reboot(int argc, char **argv)
 {
 	printf("rebooting\n");
@@ -813,6 +865,8 @@ static const struct shell_cmd cmds[] = {
 	{ "elrs",    "[SUBCMD ...]",   "ExpressLRS (mpm start elrs RATE [RX]): phrase WORDS | uid A,B,C,D,E,F |\n"
 	  "                             domain NAME | switch 0|1|2 | tlm std|off|N | modelmatch on|off |\n"
 	  "                             power DBM | capsync (capture the next sync packet)", cmd_elrs, SHELL_LIVE },
+	{ "grx",     "[SUBCMD ...]",   "GFSK receiver: status (+ bits) | arm FREQ BAUD SYNC NBITS [MAXERR [MASK]] |\n"
+	  "                             stop", cmd_grx, 0 },
 	{ "reboot",  "",               "restart the firmware",            cmd_reboot, 0 },
 };
 
