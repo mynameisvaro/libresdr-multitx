@@ -14,11 +14,14 @@ board running a MultiTX bitstream.
 | [`frsky_check.py`](frsky_check.py) | runs Multiprotocol's FrSky D8/D16 on the board and decodes captured packets like a CC2500 (CRC, hop channel, offset) |
 | [`a7105.py`](a7105.py) | A7105 packet coding (CRC-16, (7,4) FEC) and demodulator, shared by the FlySky tools |
 | [`flysky_check.py`](flysky_check.py) | the same for FlySky (AFHDS) and AFHDS2A on the virtual A7105 |
-| [`a7105_sniff.py`](a7105_sniff.py) | learns the A7105's CRC and FEC coding from a real FlySky handset; `--apply` sets it on the board |
+| [`a7105_sniff.py`](a7105_sniff.py) | learns the A7105's CRC and FEC coding from a real FlySky handset; `--live` receives with gfsk_rx (many packets a second); `--apply` sets it on the board |
 | [`afhds2a_bind.py`](afhds2a_bind.py) | binds an AFHDS2A receiver: catches its reply on RX2 and passes it to the virtual A7105 |
 | [`lora.py`](lora.py) | LoRa physical layer model: encoder, modulator, decoder; `decode --check` re-encodes captures symbol for symbol (checked on real SX127x recordings, [docs/lora.md](../docs/lora.md)) |
 | [`lora_check.py`](lora_check.py) | sends LoRa frames from the board (`lora_tx`), captures them on RX2 and decodes them |
 | [`elrs.py`](elrs.py) | ExpressLRS 4.x model (independent of the firmware): UID from a binding phrase, CRCs, hop sequence, packet layouts, the TX's slot rules, packet parser ([docs/elrs.md](../docs/elrs.md)) |
+| [`gfsk_rx_check.py`](gfsk_rx_check.py) | the GFSK receiver on the board: gfsk_tx sends FlySky/FrSky-style packets, gfsk_rx must keep every bit (cable or antennas) |
+| [`sx127x_listen/`](sx127x_listen/sx127x_listen.ino) | ESP32 + SX1278/SX1276 sketch: LoRa listener (timestamp, RSSI, SNR, frequency error per packet) plus the SBUS monitor |
+| [`sx127x_listen.py`](sx127x_listen.py) | ExpressLRS from the board received by that SX127x: CRC/nonce, fields, arrival time vs nonce, frequency error |
 | [`elrs_check.py`](elrs_check.py) | runs ExpressLRS on the board: slot timing at every rate, then captured packets decoded (LoRa) and checked with `elrs.py` (CRC and nonce, channels, switches, hop table, sync fields) |
 | [`sbus_monitor/`](sbus_monitor/sbus_monitor.ino) | ESP32 sketch: reads a receiver's SBUS and prints frame rate, lost frames, failsafe and channels 1–8 |
 | [`multi_link.py`](multi_link.py) | the PC as the handset: streams Multiprotocol serial frames (protocol, flags, option, 16 channels) to the firmware over USB; also importable (`MultiLink`, `Frame`) |

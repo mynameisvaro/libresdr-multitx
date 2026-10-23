@@ -18,6 +18,9 @@ and works the coding out:
 
   a7105_sniff.py [--proto afhds2a|afhds] [--chan N] [--packets N] [--save F]
   a7105_sniff.py --load F [F...]     # solve again from saved bursts
+  a7105_sniff.py --live [--chan N]   # receive with gfsk_rx (many packets a second)
+                                     # instead of captures; normal packets work too
+                                     # on a channel of the handset's hop table
 
 Put the transmitter next to the board with an antenna on RX2 (or cable +
 attenuator into RX2) and switch it to bind (it then sends on fixed channels:
@@ -106,6 +109,32 @@ def burst_bits(bursts, ident):
     return out
 
 
+def live(args, nbits):
+    """Packets from gfsk_rx (the FPGA receiver): bit strings after the ID code."""
+    from usbdbg import Bridge, Console
+    con = Console(Bridge())
+    freq = a7105.chan_freq(args.chan)
+    for c in ("mpm stop", "radio rate 61440000", "radio start", f"rf gain rx {args.rx_gain}"):
+        con.run(c, timeout=30)
+    print(f"  receiving on channel {args.chan} ({freq / 1e6:.3f} MHz) with gfsk_rx")
+    out = []
+    t_end = time.time() + args.timeout
+    while len(out) < args.packets and time.time() < t_end:
+        con.run(f"grx arm {freq:.0f} 500000 {a7105.FLYSKY_ID.hex()} {nbits}")
+        t = time.time()
+        while time.time() - t < 1.0:
+            r = con.run("grx").strip().splitlines()
+            if r and r[0].startswith("done"):
+                if len(r) > 1:
+                    bits = "".join(f"{b:08b}" for b in bytes.fromhex(r[1].strip()))[:nbits]
+                    out.append(bits)
+                    print(f"\r  {len(out)} packets", end="", flush=True)
+                break
+    con.run("grx stop")
+    print()
+    return out
+
+
 # ---------------------------------------------------------------- CRC
 def crc_all(data, polys, inits, reflect):
     """zero-padded CRC register for each (poly, init) pair (numpy arrays)"""
@@ -162,6 +191,17 @@ def solve_fec(streams, nbytes, types):
     code = [w for w, _ in count.most_common(16)]
     print(f"  {len(words)} packets, {len(count)} distinct code words "
           f"(16 most common: {' '.join(f'{w:02x}' for w in sorted(code))})")
+    # A few packets may not use every nibble value. If the words seen more than
+    # once span exactly 16 words (a (7,4) linear code), the missing ones follow.
+    seen = [w for w, c in count.items() if c >= 2]
+    span = {0}
+    for w in seen:
+        if w not in span:
+            span |= {x ^ w for x in span}
+    if len(code) < 16 and len(span) == 16:
+        missing = sorted(span - set(code))
+        print(f"  completing the code from its span: {' '.join(f'{w:02x}' for w in missing)} not seen")
+        code = sorted(span)
     # keep packets made only of the 16 code words (no bit errors)
     words = [ws for ws in words if all(w in code for w in ws)]
     cs = set(code)
@@ -234,26 +274,43 @@ def main(argv):
     ap.add_argument("--load", nargs="+", help="solve from saved bursts (one or more files) instead of capturing")
     ap.add_argument("--apply", action="store_true", help="set the coding found on the board")
     ap.add_argument("--any-id", action="store_true", help="don't assume the FlySky ID code")
+    ap.add_argument("--live", action="store_true", help="receive with gfsk_rx instead of capturing")
     ap.add_argument("--keep-tx", action="store_true",
                     help="self-test: leave the board's own protocol running")
     args = ap.parse_args(argv[1:])
     if args.chan is None:
         args.chan = 140 if args.proto == "afhds2a" else 1
 
-    if args.load:
-        bursts = [b for f in args.load for b in np.load(f, allow_pickle=True)["bursts"]]
+    nbytes = NBYTES[args.proto]
+    fec = args.proto == "afhds2a"
+    streams = None
+    if args.live:
+        streams = live(args, (nbytes + 2) * (14 if fec else 8))
+        if args.save:
+            np.savez(args.save, streams=np.array(streams, dtype=object))
+            print(f"  saved {len(streams)} packets to {args.save}")
+        bursts = streams
+    elif args.load:
+        bursts, streams = [], []
+        for f in args.load:
+            d = np.load(f, allow_pickle=True)
+            if "streams" in d:
+                streams += list(d["streams"])
+            else:
+                bursts += list(d["bursts"])
+        if not streams:
+            streams = None
     else:
         bursts = capture(args)
         if args.save:
             np.savez(args.save, bursts=np.array(bursts, dtype=object))
             print(f"  saved {len(bursts)} bursts to {args.save}")
-    if not bursts:
+    if not bursts and not streams:
         print("no packets")
         return 1
-    streams = burst_bits(bursts, None if args.any_id else a7105.FLYSKY_ID)
-    print(f"  {len(streams)} of {len(bursts)} bursts have the preamble and ID")
-    nbytes = NBYTES[args.proto]
-    fec = args.proto == "afhds2a"
+    if streams is None:
+        streams = burst_bits(bursts, None if args.any_id else a7105.FLYSKY_ID)
+        print(f"  {len(streams)} of {len(bursts)} bursts have the preamble and ID")
 
     if fec:
         fsols = solve_fec(streams, nbytes, TYPES[args.proto])

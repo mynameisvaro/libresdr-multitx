@@ -46,6 +46,7 @@ clock, register, AXI, block design, timing) with examples from this repository.
 | 13 | [The PC as the handset](13-pc-as-handset.md) | Multiprotocol's own serial frames over USB, and a test that was one frame early |
 | 14 | [LoRa, checked against real chips](14-lora.md) | ExpressLRS's physical layer: a model proven on SX1276 recordings, a chirp modulator in Verilog |
 | 15 | [ExpressLRS without a receiver](15-elrs.md) | ExpressLRS's own packet code, our scheduler, and two implementations that must agree |
+| 16 | [Receiving, and real chips as judges](16-receiving.md) | A GFSK receiver in the FPGA, three bugs simulation hid, an SX1278 and a handset as referees |
 
 ## Timeline
 
@@ -67,3 +68,4 @@ clock, register, AXI, block design, timing) with examples from this repository.
 | 2026-10-23 | LoRa: model reproduces 68/68 real SX1276 frames; lora_tx 30/31 frames on the board | `a2e94e5`, `99ce770` |
 | 2026-10-23 | PPM input from a radio's trainer port: 6/6 on the board with the built-in generator | `d940810` |
 | 2026-10-23 | ExpressLRS 4.x at 900 MHz: 288 PC cases, 27/27 on the board | `ad3b496` |
+| 2026-10-24 | GFSK receive path 14/14 over the air; SX1278 receives ExpressLRS 306/307; A7105 coding learned from an FS-i6X | `b207096`…(this commit) |

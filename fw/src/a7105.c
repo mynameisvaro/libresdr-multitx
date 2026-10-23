@@ -23,10 +23,9 @@
  *
  * The data sheet does not give the CRC-16 initial value or reflection, nor the
  * bit layout of the Hamming code words, so those are settable (struct
- * a7105_coding) and default to a guess: CRC-16/CCITT-FALSE and the textbook
- * Hamming(7,4) layout p1 p2 d1 p3 d2 d3 d4. tools/a7105_sniff.py learns the
- * real ones from a FlySky transmitter. The PN7 whitening is a guess too (no
- * Multiprotocol protocol on this chip uses it).
+ * a7105_coding); the defaults were learned from an FS-i6X with
+ * tools/a7105_sniff.py (see a7105_coding_default). The PN7 whitening is a guess
+ * (no Multiprotocol protocol on this chip uses it).
  */
 #include <string.h>
 
@@ -98,17 +97,21 @@ static struct a7105_info info;
 static struct a7105_coding coding;
 static uint8_t pkt[GFSK_BUF_BYTES];
 
+/* Learned from an FS-i6X (tools/a7105_sniff.py, 2026-10-24): 55 normal packets
+ * fit only CRC-16 poly 0x1021 with start value 0x1D0F over the payload, and a
+ * systematic (7,4) Hamming code: the data nibble in the top 4 bits, three parity
+ * bits below, high nibble first. */
 void a7105_coding_default(void)
 {
+	static const uint8_t fec[16] = {
+		0x00, 0x0b, 0x16, 0x1d, 0x27, 0x2c, 0x31, 0x3a,
+		0x45, 0x4e, 0x53, 0x58, 0x62, 0x69, 0x74, 0x7f,
+	};
 	coding.crc_poly = 0x1021;
-	coding.crc_init = 0xFFFF;
+	coding.crc_init = 0x1D0F;
 	coding.crc_xorout = 0x0000;
 	coding.crc_reflect = 0;
-	for (int n = 0; n < 16; n++) {
-		int d1 = (n >> 3) & 1, d2 = (n >> 2) & 1, d3 = (n >> 1) & 1, d4 = n & 1;
-		int p1 = d1 ^ d2 ^ d4, p2 = d1 ^ d3 ^ d4, p3 = d2 ^ d3 ^ d4;
-		coding.fec[n] = p1 << 6 | p2 << 5 | d1 << 4 | p3 << 3 | d2 << 2 | d3 << 1 | d4;
-	}
+	memcpy(coding.fec, fec, sizeof(fec));
 	coding.fec_low_first = 0;
 }
 
@@ -130,12 +133,27 @@ static double fpfd(void)
 	return FXTAL * ((regs[PLL_II] >> 7) + 1) / (((regs[PLL_II] >> 5) & 3) + 1);
 }
 
+/* Added to the frequency the registers give (transmit and receive): a real
+ * FlySky handset was measured below where the data sheet maths puts its
+ * channels; settable while that is worked out (a7105 foffset HZ). */
+static double freq_offset_hz;
+
+void a7105_set_freq_offset(double hz)
+{
+	freq_offset_hz = hz;
+}
+
+double a7105_freq_offset(void)
+{
+	return freq_offset_hz;
+}
+
 static double rf_freq(void)
 {
 	unsigned bip = ((regs[PLL_II] & 1) << 8) | regs[PLL_III];
 	unsigned bfp = (regs[PLL_IV] << 8) | regs[PLL_V];
 	unsigned chr = (regs[PLL_II] >> 1) & 0x0F;
-	return fpfd() * (bip + bfp / 65536.0) + regs[PLL_I] * fpfd() / (4.0 * (chr + 1));
+	return fpfd() * (bip + bfp / 65536.0) + regs[PLL_I] * fpfd() / (4.0 * (chr + 1)) + freq_offset_hz;
 }
 
 static double data_rate(void)

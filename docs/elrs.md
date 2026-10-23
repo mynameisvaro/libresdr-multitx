@@ -6,8 +6,9 @@ CRCs and frequency hopping on top of the LoRa modulator (`lora_tx`,
 handset input works with it: the PC over USB (`multi_link.py`, also with a
 gamepad), PPM, or the console.
 
-Status: checked against ExpressLRS's own code and off the air through the loopback
-cable; **not yet tried with a real ExpressLRS receiver** (none here yet).
+Status: checked against ExpressLRS's own code, off the air through the loopback
+cable, and received by a real SX1278 (306 of 307 packets, [below](#a-real-semtech-chip-2026-10-24));
+**not yet tried with an ExpressLRS receiver.**
 
 ## Using it
 
@@ -169,6 +170,25 @@ frames are too long for one capture at a rate the AD9361 runs; they share the
 coding and the slot logic with the others (checked on the PC). FrSky D16 still
 decodes 10/10 afterwards, and a protocol switch from ELRS (LO at 915.2 MHz) to
 FrSky X while running moves the LO back to 2.4 GHz.
+
+## A real Semtech chip (2026-10-24)
+
+An ESP32 with an SX1278 (`tools/sx127x_listen/`, register-level, ExpressLRS's
+LoRa settings) listened on EU433's sync channel (433.775 MHz) while the board
+sent 200 Hz for 20 s (`tools/sx127x_listen.py`):
+
+| | |
+|---|---|
+| packets received | 307 |
+| valid ExpressLRS CRC | 306 (295 RC, 11 sync), fields and channels as sent |
+| CRC failures | 1 (RSSI −89 dBm, SNR 5.5 dB: the board was cabled, so this was leakage) |
+| arrival time vs nonce × 5000 µs | mean +1.2 µs, spread 39 µs over 305 pairs |
+| carrier error (the chip's FEI) | −4.5 ppm |
+
+So the framing (SF6, implicit header, sync word 0x12) and the packets are right
+on silicon, and the slots keep time. An ExpressLRS receiver itself is the next
+check; the same ESP32 + SX1278 can run ExpressLRS's `Unified_ESP32_900_RX`
+firmware (pins: SCK 18, MISO 19, MOSI 25, NSS 5, RST 14, DIO0 26).
 
 ## What's next
 

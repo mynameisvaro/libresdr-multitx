@@ -87,8 +87,9 @@ covering CR 4/5, 4/6, 4/7 and 4/8, CRC on and off, and payloads of 1 to 255 byte
 (600-symbol frames). That confirms the whitening, header checksum, CRC, all four
 Hamming codes, both interleaver modes, the Gray mapping and the chirp convention
 against silicon. SF5/SF6 and the implicit header follow the same rules (checked
-by the model's own encode-decode test, `lora.py selftest`, for SF5–SF12); the
-first real SF5/SF6 check will be an ELRS receiver.
+by the model's own encode-decode test, `lora.py selftest`, for SF5–SF12). An
+SX1278 has since received the board's SF6 implicit-header ExpressLRS frames:
+306 of 307 with a valid packet CRC ([elrs.md](elrs.md#a-real-semtech-chip-2026-10-24)).
 
 Three receiver details the recordings forced:
 

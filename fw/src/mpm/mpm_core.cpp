@@ -577,6 +577,12 @@ extern "C" int mpm_proto_by_name(const char *name)
 	return -1;
 }
 
+extern "C" void mpm_set_hopping_table(const uint8_t *h, int n)
+{
+	for (int i = 0; i < n && i < (int)sizeof(hopping_frequency); i++)
+		hopping_frequency[i] = h[i];
+}
+
 extern "C" const uint8_t *mpm_hopping_table(int *n)
 {
 	*n = 50;

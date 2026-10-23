@@ -72,6 +72,7 @@ in reset (bridge `ctrl_reg` bit 0). Stack and variables live in the fast `data_r
 | `0x4404_0000` | 64 KB | `gfsk_tx` — GFSK modulator | CPU, USB |
 | `0x4405_0000` | 64 KB | `lora_tx` — LoRa chirp modulator ([lora.md](lora.md)) | CPU, USB |
 | `0x4406_0000` | 64 KB | `ppm_in` — PPM input on CN2 GPIO_0, with a test generator | CPU, USB |
+| `0x4407_0000` | 64 KB | `gfsk_rx` — GFSK receiver (sync word → bits) | CPU, USB |
 | `0x44A0_0000` | 64 KB | `ad9361_spi` — AXI Quad SPI (AD9361 SPI) | CPU, USB |
 | `0x7902_0000` | 64 KB | `axi_ad9361` (ADI register map) | CPU, USB |
 
@@ -139,6 +140,41 @@ the channel can be retuned live). The first symbol after start is a lead-in at
 the "0" frequency while the amplitude ramps up; after the last bit the
 frequency holds while it ramps down. The table and register maths are in
 `fw/src/gfsk.c` and `tools/gfsk.py`, the testbench in `hw/ip/gfsk_tx/tb/`.
+
+## gfsk_rx registers (base `0x4407_0000`)
+
+The receiver works on the RX samples (`axi_ad9361` channel 0, RX2 on the board):
+
+```
+mixer (CHAN_INC) -> CIC decimator, order 3, /R -> CORDIC phase and magnitude
+-> frequency = phase step -> minus a running offset estimate (frozen at the sync)
+-> bit clock DPLL (zero crossings) + integrate and dump
+-> 32-bit sync correlator (MASK, up to MAXERR errors, average level >= MINLEVEL)
+-> NBITS bits into the buffer, MSB first
+```
+
+The CPU decodes the bits like the chip it emulates (the virtual A7105: FEC, CRC).
+`fw/src/gfsk_rx.c` computes the settings: R for about 8 samples per bit, the CIC
+shift that keeps R³ inside 18 bits, the offset tracker over about 4 bits.
+
+| Offset | Name | |
+|---|---|---|
+| `0x00` | CTRL | write bit 0 = arm (search, then capture), bit 1 = stop |
+| `0x04` | STATUS | bit 0 searching, bit 1 done (cleared by the next arm), [31:16] buffer bytes (128) |
+| `0x08` | NBITS | bits to keep after the sync word |
+| `0x0C` | ID | `0x47465258` ("GFRX") |
+| `0x10` | CHAN_INC | channel offset / fs · 2³² (signed); the mixer moves it to 0 Hz |
+| `0x14` | DECIM | [8:0] R (1–256), [20:16] CIC output shift |
+| `0x18` | BAUD_INC | bit rate / (fs / R) · 2³² |
+| `0x1C` | SYNC | the 32 bits before the payload, first received in bit 31 |
+| `0x20` | MASK | which SYNC bits count |
+| `0x24` | CFG | [5:0] max sync bit errors, bit 8 invert, [19:16] offset tracker (log2 samples), [27:24] DPLL gain (log2) |
+| `0x28`–`0x34` | results | sample counter, offset estimate, average level, sync errors at the match |
+| `0x38` | MINLEVEL | minimum average level for a sync match (noise makes sync-like patterns) |
+| `0x1000` + 4·i | buffer | kept byte i |
+
+The AD9361 core delivers a sample every other `l_clk`: the pipeline follows
+`adc_valid` stage by stage (`hw/ip/gfsk_rx/tb/check.py` tests it that way).
 
 ## USB debug bridge
 

@@ -42,6 +42,9 @@ void mpm_get_ppm_range(int *min_us, int *max_us);
 void mpm_list(void);
 int  mpm_proto_by_name(const char *name);   /* name or number -> protocol, -1 */
 const uint8_t *mpm_hopping_table(int *n);
+/* overwrite the running protocol's hop table (e.g. a handset's, learned off the
+ * air); call with interrupts off */
+void mpm_set_hopping_table(const uint8_t *h, int n);
 /* AFHDS2A receiver ID per RX number (big endian: first byte on air first) */
 void mpm_set_afhds2a_rxid(int rx_num, uint32_t id);
 uint32_t mpm_get_afhds2a_rxid(int rx_num);

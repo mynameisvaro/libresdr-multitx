@@ -28,6 +28,8 @@ struct a7105_coding {
 };
 struct a7105_coding *a7105_coding(void);
 void    a7105_coding_default(void);
+void    a7105_set_freq_offset(double hz);
+double  a7105_freq_offset(void);
 
 /* for the shell */
 struct a7105_info {

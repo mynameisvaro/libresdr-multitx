@@ -365,6 +365,18 @@ static int cmd_mpm(int argc, char **argv)
 		mpm_set_option(strtol(argv[2], NULL, 0));
 		return 0;
 	}
+	if (!strcmp(sub, "hops") && argc > 3 && !strcmp(argv[2], "set")) {
+		/* mpm hops set HEX: replace the running protocol's hop table */
+		uint8_t h[50];
+		int n = hex_bytes(argv[3], h, sizeof(h));
+		if (n <= 0)
+			return -1;
+		uint32_t msr = irq_save();
+		mpm_set_hopping_table(h, n);
+		irq_restore(msr);
+		printf("%d hop channels set\n", n);
+		return 0;
+	}
 	if (!strcmp(sub, "hops")) {
 		int n;
 		const uint8_t *h = mpm_hopping_table(&n);
@@ -573,6 +585,12 @@ static int cmd_a7105_locked(int argc, char **argv)
 		}
 		memcpy(c->fec, b, 16);
 		c->fec_low_first = argc > 3 && !strcmp(argv[3], "lowfirst");
+		return 0;
+	}
+	if (!strcmp(argv[1], "foffset")) {
+		if (argc > 2)
+			a7105_set_freq_offset(strtod(argv[2], NULL));
+		printf("frequency offset %.0f Hz\n", a7105_freq_offset());
 		return 0;
 	}
 	if (!strcmp(argv[1], "rx") && argc > 2) {
@@ -857,12 +875,12 @@ static const struct shell_cmd cmds[] = {
 	{ "mpm",     "SUBCMD ...",     "Multiprotocol: list | start PROTO [SUB [RX [OPT [bind]]]] |\n"
 	  "                             binddone | stop | ch N VALUE | option N | id HEX |\n"
 	  "                             rxid HEX [RX] |\n"
-	  "                             hops | status", cmd_mpm, SHELL_LIVE },
+	  "                             hops [set HEX] | status", cmd_mpm, SHELL_LIVE },
 	{ "radio",   "SUBCMD ...",     "rate HZ | start | stop | rxfollow 0|1 | capture (next packet)", cmd_radio, 0 },
 	{ "cc2500",  "",               "virtual CC2500 registers and last packet", cmd_cc2500, SHELL_LIVE },
 	{ "a7105",   "[SUBCMD ...]",   "virtual A7105: registers, last packet | coding |\n"
 	  "                             crc POLY INIT [REFLECT [XOROUT]] | fec HEX32 [lowfirst] | fec default |\n"
-	  "                             rx HEX (queue a received packet)", cmd_a7105, SHELL_LIVE },
+	  "                             rx HEX (queue a received packet) | foffset [HZ]", cmd_a7105, SHELL_LIVE },
 	{ "lora",    "[SUBCMD ...]",   "LoRa frames: cfg SF BW CR [crc|nocrc] [implicit|explicit] [pre N]\n"
 	  "                             [sync HEX] [iqinv|iqnorm] [ldro] | send FREQ HEX [DBM]", cmd_lora, 0 },
 	{ "input",   "[SUBCMD ...]",   "handset input: status | console | ppm [falling] | timeout MS |\n"

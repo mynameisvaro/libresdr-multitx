@@ -130,18 +130,21 @@ Running the board on a remote machine over USB/IP: [docs/remote-usb.md](docs/rem
 - [x] Virtual CC2500 + Multiprotocol's FrSky D8/D16 code, packets verified off the air ([docs/multiprotocol.md](docs/multiprotocol.md))
 - [x] Bind a real FrSky receiver (XM+, D16): exact channels via SBUS, 0.74% frames lost ([results](docs/multiprotocol.md#testing-with-a-frsky-receiver))
 - [x] A7105 shim → FlySky AFHDS / AFHDS2A, verified off the air
-- [ ] FlySky with a real handset (learn the A7105 coding) and receivers
+- [x] FlySky A7105 coding learned from a real FS-i6X (CRC and FEC, now the default; [docs](docs/multiprotocol.md#results-with-an-fs-i6x-and-an-x6b-2026-10-24))
+- [ ] FlySky receivers: the X6B doesn't bind to the board yet (lead: the A7105's real channel frequencies)
 - [x] Protocol callbacks on a timer interrupt: the console can't delay a packet ([journey ch. 12](docs/journey/12-timer-interrupt.md))
 - [x] Handset input from the PC: Multiprotocol serial frames over USB ([`multi_link.py`](tools/multi_link.py), [docs](docs/multiprotocol.md#handset-input-from-the-pc))
 - [x] A gamepad on the PC as the sticks ([`multi_link.py --gamepad`](tools/gamepad.py))
 - [x] PPM input from a radio's trainer port (CN2 pin 1): `tools/ppm_check.py` 6/6 on the board with `ppm_in`'s built-in generator ([docs](docs/multiprotocol.md#handset-input-from-a-radio-ppm))
 - [ ] PPM from the real FlySky on CN2 (check its trainer-port level first)
-- [ ] GFSK receive path (telemetry, bind replies)
+- [x] GFSK receive path: `gfsk_rx` in the FPGA (sync word, bit clock, raw bits), 14/14 packets over the air at FlySky and FrSky settings; the virtual A7105 receives ([docs/architecture.md](docs/architecture.md#gfsk_rx-registers-base-0x4407_0000))
+- [ ] Receive in the virtual CC2500 (FrSky telemetry) and a real receiver's telemetry
 - [ ] NRF24L01, CYRF6936 (DSSS), SX1276 (LoRa) shims
 - [x] LoRa physical layer: model checked symbol for symbol on real SX1276 recordings, `lora_tx` chirp modulator (simulated) ([docs/lora.md](docs/lora.md))
 - [x] LoRa on the board: 30/31 frames exact through the loopback, 2.4 GHz and 868/915 MHz ([results](docs/lora.md#on-the-board))
 - [x] ExpressLRS 4.x at 900 MHz: ExpressLRS's own packet/CRC/hopping code, every rate; checked against an independent model (288 cases) and off the air, 27/27 ([docs/elrs.md](docs/elrs.md))
-- [ ] ExpressLRS with a real receiver (binding phrase), then telemetry and bind mode
+- [x] ExpressLRS frames received by a real SX1278 at 433 MHz: 306/307 valid, timing within 39 µs ([results](docs/elrs.md#a-real-semtech-chip-2026-10-24))
+- [ ] ExpressLRS with a real receiver (binding phrase; ExpressLRS firmware on the ESP32 + SX1278 would do), then telemetry and bind mode
 - [ ] ExpressLRS at 2.4 GHz: learn the SX1280's long-interleaving coding; FLRC later
 - [ ] Stand-alone boot (the board has no FPGA flash; needs a small boot host)
 

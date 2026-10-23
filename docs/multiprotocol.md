@@ -314,8 +314,10 @@ You need the FlySky handset, the receiver(s), and antennas on **both TX/RX and
 RX2**: the board listens on RX2 for the handset and for the receiver's bind reply.
 Load the bitstream and firmware first (`make -C fw load`).
 
-**1. Learn the coding from the handset.** This step must come first: with the
-guessed coding a receiver will most likely ignore every packet.
+**1. Learn the coding from the handset.** Done for an FS-i6X (results below,
+now the default); repeat it for another handset model if a receiver ignores the
+board. With the gfsk_rx bitstream, `--live --chan N` on one of the handset's hop
+channels (they are in its bind packet) collects many normal packets quickly.
 
 - AFHDS2A handset (FS-i6, FS-i6X, ...): put it in bind mode a few tens of cm from
   the board, move the sticks, then let it leave bind mode if it can (bind and
@@ -369,11 +371,54 @@ each receiver bound and followed the sticks, and `mpm status` after a minute of
 running. If a receiver binds but drops out, try `mpm start flsky2a 0 0 0 OPTION`
 with a small frequency offset as the option.
 
+### Results with an FS-i6X and an X6B (2026-10-24)
+
+**The coding is learned.** Four bind packets from the capture-based sniffer gave
+the FEC (15 of the 16 code words; the 16th follows from the others, since the
+code is linear) but not a unique CRC. `a7105_sniff.py --live` then received 55
+normal packets in 3 minutes with `gfsk_rx` on channel 21, one of the handset's
+hop channels (taken from its bind packet), and those fit exactly one coding:
+
+| | |
+|---|---|
+| FEC | systematic (7,4) Hamming: nibble in the top 4 bits, 3 parity bits; code words `00 0b 16 1d 27 2c 31 3a 45 4e 53 58 62 69 74 7f`, high nibble first |
+| CRC | CRC-16, poly `0x1021`, start `0x1D0F` over the payload (the ID code isn't included), no reflection, no final XOR |
+
+It is now the firmware default (`a7105_coding_default`). Decoded handset packets
+look as Multiprotocol expects: `58` (sticks) + TX ID `cc 05 b6 c4` + the bound
+receiver's ID + 14 channels in µs, little endian (`dc 05` = 1500).
+
+**The X6B did not bind to the board (open).** Multiprotocol's own AFHDS2A bind
+ran with the learned coding (sub-protocol 2, SBUS), and the board's receiver
+listened after every bind packet: no reply in ~90,000 receive windows, and
+`afhds2a_bind.py`'s capture search found none either. Ruled out: the CRC (all five
+candidates of the first solve; then the confirmed one), the coding registers
+(no whitening, FEC and CRC on, 4-byte ID), Multiprotocol's fine tune (CH15,
+±150 kHz). The receiver is fine (it binds to the FS-i6X).
+
+The lead: **frequency**. The handset's bind packets, captured at a known LO,
+are at about 2469.03 MHz, while the virtual A7105 puts channel 140 at
+2470.00 MHz (the data sheet maths: 2400 MHz + 140 × 500 kHz); `gfsk_rx` also
+found the handset's normal packets about 500 kHz below the channel it listened
+on. `a7105 foffset HZ` moves the virtual chip's channels; binding at −1000, −750
+and −500 kHz didn't work either (one round, 15 s each), so the rule isn't simply
+a fixed shift yet. Next: measure the handset's bind packets on both bind
+channels (13 and 140) and a few hop channels precisely, to get the real channel
+formula, then bind again.
+
+Also learned: a bound handset's normal packets give its TX ID, the receiver's
+ID and (from its bind packets) the hop table, so the board can stand in for the
+handset without binding (`mpm id`, `mpm rxid`, `mpm hops set`). Tried once with
+the IDs of the wrong model memory; worth repeating with the right ones
+(receiver ID `5a 45 9d 41` after the re-bind) once the frequencies are right.
+
 ## Next
 
+- FlySky: the A7105's real channel frequencies (above), then the X6B bind and
+  its telemetry through `gfsk_rx`.
 - More handset inputs: PPM from a FlySky trainer port on the GPIO pins (the
   frames over USB and the gamepad are done).
-- The receive path, for D8/D16 telemetry and the protocols that need replies.
-- Make the coding learned from the handset the firmware default.
+- Receive in the virtual CC2500 (FrSky telemetry; needs a receiver that sends
+  it, the XM+ doesn't).
 - A timing run of the A7105 protocols at 61.44 MSPS against a real receiver (the
   4 MSPS decode runs now show no late callbacks).
