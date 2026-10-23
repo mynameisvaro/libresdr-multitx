@@ -34,7 +34,7 @@ These are known and recorded, not forgotten:
 | Step | What it unlocks | Size |
 |---|---|---|
 | FlySky with a real handset and receivers | the second chip family on real hardware | small (tools exist) |
-| Handset input: Multiprotocol's serial protocol (EdgeTX/OpenTX "Multi" module) on CN2's UART or USB | flying with a real radio instead of console commands | medium |
+| ~~Handset input~~ from the PC over USB: done (Multi serial frames, `multi_link.py`). Left: PPM from a FlySky trainer port on the GPIO pins | flying from the PC or a real radio instead of console commands | small to medium |
 | GFSK receive path in the FPGA | FrSky telemetry, AFHDS2A bind replies without the PC, NRF24 auto-ack | large: a demodulator, timing recovery, sync search |
 | More virtual chips: NRF24L01, CYRF6936 (DSSS), SX1276 (LoRa) | many more protocols | medium to large each |
 | ExpressLRS | a modern long-range protocol | large: LoRa modem, FLRC is undocumented |

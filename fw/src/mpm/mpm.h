@@ -19,6 +19,18 @@ void mpm_set_channel(int ch, int value); /* 0..2047, 1024 = centre */
  * in their callback (CC2500_SetFreqOffset) apply it on the next packet */
 void mpm_set_option(int opt);
 void mpm_print_status(void);
+void mpm_pause(int on);                  /* hold the callbacks (no input signal) */
+int  mpm_binding(void);
+int  mpm_protocol(void);                 /* proto | sub << 8 | RX << 16, or -1 */
+
+/* Multiprotocol serial frames (input.c). mpm_serial_frame applies the flags,
+ * option and channels; it returns 1 when the protocol must be (re)started as in
+ * *m, 0 otherwise, -1 for a bad frame. Call with interrupts off. */
+struct mpm_model {
+	int proto, sub, rx, option, bind;
+};
+int  mpm_serial_frame(const uint8_t *frame, int len, struct mpm_model *m);
+void mpm_serial_reset(void);             /* the next frame counts as a new model */
 void mpm_list(void);
 int  mpm_proto_by_name(const char *name);   /* name or number -> protocol, -1 */
 const uint8_t *mpm_hopping_table(int *n);

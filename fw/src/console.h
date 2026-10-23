@@ -9,6 +9,16 @@
 #define MAILBOX_MAGIC     0x434F4E53u    /* "CONS" */
 #define CONSOLE_TX_SIZE   2048           /* bytes, power of two */
 #define CONSOLE_RX_SIZE   256            /* characters, one per 32-bit word */
+#define INPUT_SLOTS       8              /* Multi serial frames from the host (input.c) */
+#define INPUT_FRAME_MAX   36
+
+/* input status bits (mailbox.in_status) */
+#define IN_ST_USB         (1u << 0)      /* the host's frames are in control */
+#define IN_ST_SIGNAL      (1u << 1)      /* a frame arrived within the timeout */
+#define IN_ST_PAUSED      (1u << 2)      /* no signal: the protocol isn't sending */
+#define IN_ST_RUNNING     (1u << 3)      /* a protocol is running */
+#define IN_ST_BINDING     (1u << 4)
+#define IN_ST_BAD_PROTO   (1u << 5)      /* the frame's protocol isn't built in */
 
 /* Layout shared with tools/usbdbg.py. Counters are free running; each one is
  * written by one side only (fw = firmware, host = PC). */
@@ -26,6 +36,18 @@ struct mailbox {
 	uint32_t reserved[6];
 	uint8_t  tx[CONSOLE_TX_SIZE];   /* offset 0x40 */
 	uint32_t rx[CONSOLE_RX_SIZE];   /* offset 0x840 */
+	/* handset input: Multiprotocol serial frames (offset 0xC40) */
+	uint32_t in_head;     /* host: frames written to in[] */
+	uint32_t in_tail;     /* fw: frames taken from in[] */
+	uint32_t in_status;   /* fw: IN_ST_* */
+	uint32_t in_model;    /* fw: running protocol | sub << 8 | RX number << 16 */
+	uint32_t in_frames;   /* fw: frames accepted */
+	uint32_t in_errors;   /* fw: bad frames and overruns */
+	uint32_t in_reserved[2];
+	struct {
+		uint32_t len;                     /* bytes in data[] */
+		uint8_t  data[INPUT_FRAME_MAX];
+	} in[INPUT_SLOTS];              /* offset 0xC60, 40 bytes each */
 };
 
 extern volatile struct mailbox mailbox;

@@ -43,6 +43,7 @@ clock, register, AXI, block design, timing) with examples from this repository.
 | 10 | [A real receiver](10-real-receiver.md) | Binding an XM+, proving the link is ours, and measuring it with an ESP32 |
 | 11 | [Where it goes next](11-next.md) | Open questions and how to choose the next step |
 | 12 | [The protocol on a timer interrupt](12-timer-interrupt.md) | Measuring a 59 ms stall, then making the console unable to delay a packet |
+| 13 | [The PC as the handset](13-pc-as-handset.md) | Multiprotocol's own serial frames over USB, and a test that was one frame early |
 
 ## Timeline
 
@@ -59,3 +60,5 @@ clock, register, AXI, block design, timing) with examples from this repository.
 | 2026-10-22 23:52 | A real FrSky XM+ binds and holds the link | `3739e55` |
 | 2026-10-23 00:25 | Link measured: exact channels, 0.74% frames lost | `bfa6b2d` |
 | 2026-10-23 | Protocol callbacks on a timer interrupt: worst lateness 58.8 ms → 2 µs | `bc1bebd` |
+| 2026-10-23 | No slow work inside callbacks: longest 21 ms → 1.5 ms | `61d3f92` |
+| 2026-10-23 | Handset input from the PC: Multi serial frames over USB | (next commit) |

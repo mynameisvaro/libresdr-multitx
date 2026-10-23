@@ -17,6 +17,8 @@ board running a MultiTX bitstream.
 | [`a7105_sniff.py`](a7105_sniff.py) | learns the A7105's CRC and FEC coding from a real FlySky handset; `--apply` sets it on the board |
 | [`afhds2a_bind.py`](afhds2a_bind.py) | binds an AFHDS2A receiver: catches its reply on RX2 and passes it to the virtual A7105 |
 | [`sbus_monitor/`](sbus_monitor/sbus_monitor.ino) | ESP32 sketch: reads a receiver's SBUS and prints frame rate, lost frames, failsafe and channels 1–8 |
+| [`multi_link.py`](multi_link.py) | the PC as the handset: streams Multiprotocol serial frames (protocol, flags, option, 16 channels) to the firmware over USB; also importable (`MultiLink`, `Frame`) |
+| [`input_check.py`](input_check.py) | checks the handset input path: protocol start from a frame, exact channels, bind flag, link-loss pause and resume, protocol switch |
 | [`sched_check.py`](sched_check.py) | runs a protocol while loading the console (busy, and with the output ring full) and checks that no callback is late |
 | [`sbus_tune.py`](sbus_tune.py) | logs the SBUS monitor from its serial port and sweeps the FrSky frequency fine tune (`mpm option`) against the lost-frame rate |
 | [`selftest.py`](selftest.py) | hardware self-test: bridge, memory, registers, AD9361 SPI |

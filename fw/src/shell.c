@@ -12,6 +12,7 @@
 #include "radio.h"
 #include "gpio.h"
 #include "hw.h"
+#include "input.h"
 #include "irq.h"
 #include "rf.h"
 #include "shell.h"
@@ -372,6 +373,7 @@ static int cmd_mpm(int argc, char **argv)
 		const struct radio_stats *r = radio_get_stats();
 		const struct cc2500_info *c = cc2500_get_info();
 		mpm_print_status();
+		input_print_status();
 		printf("radio %s, %lu packets, LO %.3f MHz, %lu retunes (last %lu us, max %lu us)\n",
 		       radio_running() ? "on" : "off", (unsigned long)r->packets, r->lo_hz / 1e6,
 		       (unsigned long)r->retunes, (unsigned long)r->last_retune_us,
@@ -409,6 +411,7 @@ static int cmd_mpm_locked(int argc, char **argv)
 			printf("unknown protocol '%s' (mpm list)\n", argv[2]);
 			return 0;
 		}
+		input_console();
 		if (!radio_running()) {
 			printf("radio on (front end needs ~0.5 s)\n");
 			if (radio_start()) {
@@ -428,6 +431,7 @@ static int cmd_mpm_locked(int argc, char **argv)
 		return 0;
 	}
 	if (!strcmp(sub, "stop")) {
+		input_console();
 		mpm_stop();
 		radio_stop();
 		return 0;
@@ -565,6 +569,19 @@ static int cmd_a7105_locked(int argc, char **argv)
 	return -1;
 }
 
+static int cmd_input(int argc, char **argv)
+{
+	if (argc == 1) {
+		input_print_status();
+		return 0;
+	}
+	if (argc > 2 && !strcmp(argv[1], "timeout")) {
+		input_set_timeout(num(argv[2]));
+		return 0;
+	}
+	return -1;
+}
+
 static int cmd_reboot(int argc, char **argv)
 {
 	printf("rebooting\n");
@@ -595,6 +612,7 @@ static const struct shell_cmd cmds[] = {
 	{ "a7105",   "[SUBCMD ...]",   "virtual A7105: registers, last packet | coding |\n"
 	  "                             crc POLY INIT [REFLECT [XOROUT]] | fec HEX32 [lowfirst] | fec default |\n"
 	  "                             rx HEX (queue a received packet)", cmd_a7105, SHELL_LIVE },
+	{ "input",   "[timeout MS]",   "handset input from the PC (Multi serial frames over USB)", cmd_input, SHELL_LIVE },
 	{ "reboot",  "",               "restart the firmware",            cmd_reboot, 0 },
 };
 

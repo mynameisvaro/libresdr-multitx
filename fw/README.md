@@ -69,6 +69,20 @@ and is then dropped (counted in `info`), so the firmware never hangs on the cons
 
 The session counter changes at every boot, which lets the host notice a reload.
 
+## Handset input
+
+The rest of the mailbox (from offset `0xC40`) is an 8-slot ring of Multiprotocol
+serial frames: what EdgeTX sends a Multi module, written here by the PC over USB
+(`tools/multi_link.py`). [`input.c`](src/input.c) takes them from the main loop and
+hands them to `mpm_serial_frame()` (in `mpm_core.cpp`, ported from Multiprotocol's
+`update_serial_data()`): flags, option and channels apply at once, a new model or
+a bind flag restarts the protocol. The frames take control when they arrive;
+`mpm start` / `mpm stop` on the console take it back. With no frame for the
+timeout (`input timeout MS`, default 70 ms as in Multiprotocol) the protocol is
+paused, so the receiver goes to failsafe; the next frame resumes it. Status words
+next to the ring (`IN_ST_*` in `console.h`) tell the host what the firmware is
+doing.
+
 ## Interrupts
 
 Only the timer interrupt is used. The protocol callbacks run from timer 1's alarm,
@@ -98,6 +112,7 @@ Code called from a protocol callback must not print.
 | [`radio.c`](src/radio.c) | radio layer: LO slices with fast retunes, NCO offset, modem cache, power, front end |
 | [`cc2500.c`](src/cc2500.c) | virtual CC2500: SPI slave with registers, strobes, FIFO; builds and sends packets |
 | [`a7105.c`](src/a7105.c) | virtual A7105: the same for FlySky, plus settable CRC/FEC coding and an RX FIFO filled from the console |
+| [`input.c`](src/input.c) | handset input: Multi serial frames from the mailbox, link-loss pause |
 | [`mpm/`](src/mpm) | Multiprotocol port: Arduino shim, core (globals, start-up, scheduler on the timer alarm) |
 | [`hw.h`](src/hw.h) | address map and register access helpers |
 

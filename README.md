@@ -19,7 +19,8 @@ front of the AD9361. ExpressLRS support is planned on the same foundation.
 
 > **Status:** Multiprotocol's own FrSky D16 code, running unmodified on a virtual
 > CC2500, binds a real FrSky XM+ receiver and drives its channels exactly, with
-> 0.74% frames lost at 1 m. FlySky (AFHDS/AFHDS2A) runs on a virtual A7105 and is
+> 0.74% frames lost at 1 m, driven from the PC over USB with Multiprotocol's
+> own serial frames. FlySky (AFHDS/AFHDS2A) runs on a virtual A7105 and is
 > waiting for its on-air coding to be learned from a real handset. See the
 > [roadmap](#roadmap).
 >
@@ -38,10 +39,10 @@ flowchart LR
     hop --> ad_if[axi_ad9361]
     usb[USB debug bridge] -.-> mb
   end
-  handset["RC handset<br/>(serial / CRSF)"] --> uart
+  handset["RC handset<br/>(PPM / serial / CRSF)"] --> uart
   ad_if <--> ad9361[AD9361]
   ad9361 <--> ant(("antennas"))
-  pc["PC (debug)"] -.-> fx3[FX3 USB]
+  pc["PC: Multi serial frames,<br/>debug"] -.-> fx3[FX3 USB]
   fx3 -.-> usb
 ```
 
@@ -125,7 +126,9 @@ Running the board on a remote machine over USB/IP: [docs/remote-usb.md](docs/rem
 - [x] Bind a real FrSky receiver (XM+, D16): exact channels via SBUS, 0.74% frames lost ([results](docs/multiprotocol.md#testing-with-a-frsky-receiver))
 - [x] A7105 shim → FlySky AFHDS / AFHDS2A, verified off the air
 - [ ] FlySky with a real handset (learn the A7105 coding) and receivers
-- [ ] Handset input (Multiprotocol serial protocol from EdgeTX/OpenTX)
+- [x] Protocol callbacks on a timer interrupt: the console can't delay a packet ([journey ch. 12](docs/journey/12-timer-interrupt.md))
+- [x] Handset input from the PC: Multiprotocol serial frames over USB ([`multi_link.py`](tools/multi_link.py), [docs](docs/multiprotocol.md#handset-input-from-the-pc))
+- [ ] More handset inputs: PPM from a FlySky trainer port (GPIO), gamepad on the PC
 - [ ] GFSK receive path (telemetry, bind replies)
 - [ ] NRF24L01, CYRF6936 (DSSS), SX1276 (LoRa) shims
 - [ ] ExpressLRS (LoRa first, FLRC later)

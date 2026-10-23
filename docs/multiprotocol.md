@@ -155,9 +155,43 @@ Two more checks for the A7105 tools, both without a handset:
   `afhds2a_bind.py` works on a synthetic capture, and with no receiver it times
   out cleanly.
 
+## Handset input from the PC
+
+The PC can drive the board the way EdgeTX drives a Multi module: with
+Multiprotocol serial frames (protocol, sub-protocol, RX number, option,
+bind / range / power flags, 16 channels of 11 bits; the "MULTI protocol serial
+definition" in `Multiprotocol.h`). `tools/multi_link.py` writes them into a ring in
+the firmware's mailbox over USB, one bridge transaction per frame:
+
+```bash
+python3 tools/multi_link.py frskyx --option -40 --ch 1=1600us 2=-50% 5=100%
+python3 tools/multi_link.py frskyx --bind --seconds 10     # bind, then run without --bind
+```
+
+The firmware parses them with code ported from Multiprotocol's
+`update_serial_data()` (fw/src/input.c, `mpm_serial_frame` in mpm_core.cpp), so the
+rules are Multiprotocol's: a new protocol / sub-protocol / RX number restarts the
+protocol, setting the bind flag restarts it in bind mode and clearing it ends bind,
+and the option, power and range flags and the channels apply to the next packet.
+Like Multiprotocol, the protocol pauses when no frame arrives for 70 ms (the
+receiver goes to failsafe) and resumes with the next frame. While frames arrive
+they are in control; `mpm start` / `mpm stop` on the console take control back.
+
+Over the USB/IP tunnel a frame takes a few hundred ms, so set a longer timeout
+there (`--timeout 3000`). `tools/input_check.py --timeout 3000` checked it on the
+board that way, 8/8: protocol start from a frame, 16 exact channel values, bind
+on/off, pause on link loss (callbacks stop) and resume, a switch to AFHDS2A, and
+the console taking control back. Streaming frames made no callback late (worst
+2 µs).
+
+Not yet: failsafe frames (Multiprotocol's `FAILSAFE_ENABLE` isn't built in, so
+they are skipped), telemetry back to the PC, and the other inputs (PPM from a
+FlySky trainer port on the GPIO pins, serial on CN2's UART).
+
 ## Testing with a FrSky receiver
 
-The firmware has no handset input yet, so channels are set from the console.
+Channels can be set from the console (below) or from the PC with
+`multi_link.py` (above).
 
 1. Connect antennas to TX/RX (channel 1) and to the receiver. Bind power is
    −30 dBm, as on a real Multiprotocol module, so keep them within a metre or so.
@@ -288,8 +322,8 @@ with a small frequency offset as the option.
 
 ## Next
 
-- Handset input: the Multiprotocol serial protocol (EdgeTX/OpenTX "Multi" module)
-  on CN2's UART or over USB.
+- More handset inputs: PPM from a FlySky trainer port on the GPIO pins (the
+  frames over USB are done), a gamepad on the PC through `multi_link.py`.
 - The receive path, for D8/D16 telemetry and the protocols that need replies.
 - Make the coding learned from the handset the firmware default.
 - A timing run of the A7105 protocols at 61.44 MSPS against a real receiver (the

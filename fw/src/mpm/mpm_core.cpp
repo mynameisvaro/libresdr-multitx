@@ -151,6 +151,7 @@ static void __attribute__((unused)) crc8_update(uint8_t byte)
 #define MPM_DEFAULT_ID 0x4D545831u      // "MTX1"
 
 static uint64_t next_cb;                // timer tick of the next callback
+static volatile int paused;             // no input signal: callbacks held
 static uint32_t cb_count, cb_late, cb_max_late_us, cb_first_late_us, cb_max_us;
 
 static void mpm_alarm(void);
@@ -277,6 +278,11 @@ static void mpm_alarm(void)
 	if (!remote_callback)
 		return;
 	uint64_t now = timer_ticks();
+	if (paused) {                   // like Multiprotocol without a signal: nothing
+		next_cb = now + TIMER_US(1000); // is sent, and it restarts from "now"
+		timer_alarm_at(next_cb);
+		return;
+	}
 	if (now < next_cb) {            // (an alarm longer than the 32-bit timer)
 		timer_alarm_at(next_cb);
 		return;
@@ -298,6 +304,135 @@ static void mpm_alarm(void)
 	if (next_cb < now)              // fell behind: resynchronise
 		next_cb = now + TIMER_US(next);
 	timer_alarm_at(next_cb);
+}
+
+extern "C" void mpm_pause(int on)
+{
+	paused = on;
+}
+
+// ---------------------------------------------------------------- serial input
+// One Multiprotocol serial frame (the "MULTI protocol serial definition" in
+// Multiprotocol.h): what EdgeTX sends a Multi module, here from the PC over USB
+// (input.c). Adapted from update_serial_data(), update_channels_aux() and
+// End_Bind() in Multiprotocol.ino. Failsafe isn't built in (no FAILSAFE_ENABLE),
+// so failsafe frames are skipped.
+static uint8_t serial_cur[3];           // cur_protocol: header, protocol, RX/sub bytes
+static int serial_have_model;
+
+extern "C" void mpm_serial_reset(void)
+{
+	serial_have_model = 0;
+}
+
+static void end_bind(void)
+{
+	if (protocol == PROTO_FRSKYD || protocol == PROTO_FRSKYX || protocol == PROTO_AFHDS2A)
+		BIND_DONE;
+	else if (bind_counter > 2)
+		bind_counter = 2;
+}
+
+extern "C" int mpm_serial_frame(const uint8_t *b, int len, struct mpm_model *m)
+{
+	static bool prev_ch_mapping = false;
+
+	if (len < 26 || len > 36 || (b[0] & 0xFC) != 0x54)
+		return -1;
+	if (b[0] & 0x02)                    // failsafe values instead of channels
+		return 0;
+	if (b[1] & 0x20) RANGE_FLAG_on; else RANGE_FLAG_off;
+	if (b[1] & 0x40) AUTOBIND_FLAG_on; else AUTOBIND_FLAG_off;
+	if (b[2] & 0x80) POWER_FLAG_off; else POWER_FLAG_on;
+	option = b[3];
+
+	uint8_t h0 = b[0];
+	DISABLE_CH_MAP_off;
+	DISABLE_TELEM_off;
+	if (len > 26) {                     // protocol V2: more protocol and RX bits, flags
+		h0 = (b[26] & 0xF0) | (b[0] & 0x0F);
+		if (b[26] & 0x02)
+			DISABLE_TELEM_on;
+		if (b[26] & 0x01)
+			DISABLE_CH_MAP_on;
+	}
+
+	int ret = 0;
+	if (!serial_have_model || h0 != serial_cur[0] || (b[1] & 0x5F) != (serial_cur[1] & 0x5F) ||
+	    (b[2] & 0x7F) != (serial_cur[2] & 0x7F)) {
+		// new model selected
+		m->bind = (b[1] & 0x80) || IS_AUTOBIND_FLAG_on;
+		m->proto = b[1] & 0x1F;
+		if (!(h0 & 1))
+			m->proto += 32;
+		if (len > 26)
+			m->proto |= b[26] & 0xC0;
+		m->sub = (b[2] >> 4) & 0x07;
+		m->rx = b[2] & 0x0F;
+		if (len > 26)
+			m->rx |= b[26] & 0x30;
+		m->option = (int8_t)option;
+		ret = 1;
+	} else if ((b[1] & 0x80) && !(serial_cur[1] & 0x80)) {
+		// bind flag set: restart the protocol in bind mode
+		m->bind = 1;
+		m->proto = protocol;
+		m->sub = sub_protocol;
+		m->rx = RX_num;
+		m->option = (int8_t)option;
+		ret = 1;
+	} else if (!(b[1] & 0x80) && (serial_cur[1] & 0x80)) {
+		end_bind();                     // bind flag reset: ask the protocol to end bind
+	}
+	serial_cur[0] = h0;
+	serial_cur[1] = b[1];
+	serial_cur[2] = b[2];
+	serial_have_model = 1;
+
+	if (multi_protocols_index == 0xFF || multi_protocols[multi_protocols_index].chMap == 0)
+		DISABLE_CH_MAP_off;             // not a protocol whose channel map can be disabled
+	if (prev_ch_mapping != IS_DISABLE_CH_MAP_on) {
+		prev_ch_mapping = IS_DISABLE_CH_MAP_on;
+		if (IS_DISABLE_CH_MAP_on) {
+			for (uint8_t i = 0; i < 4; i++)
+				CH_AETR[i] = CH_TAER[i] = CH_EATR[i] = i;
+		} else {
+			CH_AETR[0] = AILERON; CH_AETR[1] = ELEVATOR; CH_AETR[2] = THROTTLE; CH_AETR[3] = RUDDER;
+			CH_TAER[0] = THROTTLE; CH_TAER[1] = AILERON; CH_TAER[2] = ELEVATOR; CH_TAER[3] = RUDDER;
+			CH_EATR[0] = ELEVATOR; CH_EATR[1] = AILERON; CH_EATR[2] = THROTTLE; CH_EATR[3] = RUDDER;
+		}
+	}
+
+	// 16 channels of 11 bits, packed like SBUS in b[4..25]
+	uint32_t bits = 0;
+	int nbits = 0, pos = 4;
+	for (int i = 0; i < NUM_CHN; i++) {
+		while (nbits < 11) {
+			bits |= (uint32_t)b[pos++] << nbits;
+			nbits += 8;
+		}
+		Channel_data[i] = bits & 0x7FF;
+		bits >>= 11;
+		nbits -= 11;
+	}
+	Channel_AUX = 0;
+	for (uint8_t i = 0; i < 8; i++)
+		if (Channel_data[CH5 + i] > CHANNEL_SWITCH)
+			Channel_AUX |= 1 << i;
+
+	if (len == 28 && protocol == PROTO_FRSKYX)
+		binding_idx = b[27];            // FrSky X bind options (telemetry, CH1-8 / 9-16)
+	return ret;
+}
+
+extern "C" int mpm_binding(void)
+{
+	return IS_BIND_IN_PROGRESS;
+}
+
+extern "C" int mpm_protocol(void)
+{
+	return remote_callback ? protocol | sub_protocol << 8 | RX_num << 16 : -1;
 }
 
 extern "C" void mpm_set_channel(int ch, int value)
