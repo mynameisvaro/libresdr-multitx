@@ -44,6 +44,7 @@ clock, register, AXI, block design, timing) with examples from this repository.
 | 11 | [Where it goes next](11-next.md) | Open questions and how to choose the next step |
 | 12 | [The protocol on a timer interrupt](12-timer-interrupt.md) | Measuring a 59 ms stall, then making the console unable to delay a packet |
 | 13 | [The PC as the handset](13-pc-as-handset.md) | Multiprotocol's own serial frames over USB, and a test that was one frame early |
+| 14 | [LoRa, checked against real chips](14-lora.md) | ExpressLRS's physical layer: a model proven on SX1276 recordings, a chirp modulator in Verilog |
 
 ## Timeline
 

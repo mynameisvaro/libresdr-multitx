@@ -5,6 +5,7 @@
 #include "gfsk.h"
 #include "gpio.h"
 #include "hw.h"
+#include "lora.h"
 #include "radio.h"
 #include "rf.h"
 #include "timer.h"
@@ -101,7 +102,7 @@ int radio_running(void)
 
 int radio_tx_busy(void)
 {
-	return gfsk_busy();
+	return gfsk_busy() || lora_busy();
 }
 
 /* centre of the slice holding freq_hz */
@@ -110,15 +111,14 @@ static double slice_lo(double freq_hz)
 	return SLICE_BASE_HZ + (floor((freq_hz - SLICE_BASE_HZ) / slice) + 0.5) * slice;
 }
 
-int radio_tx(double freq_hz, const struct radio_modem *m, double dbm,
-             const uint8_t *data, int nbits)
+/* LO and power for a packet at freq_hz: retune only when the channel leaves the
+ * current slice, with a fast synthesiser-only retune (~0.3 ms; radio_start did
+ * the calibrations). A full driver tune here took 2.4 ms, too long inside a
+ * protocol callback. Returns the NCO offset from the LO in *offset. */
+static int prepare(double freq_hz, double dbm, double *offset)
 {
-	if (!running || gfsk_busy())
+	if (!running || radio_tx_busy())
 		return -1;
-
-	/* LO: retune only when the channel leaves the current slice, with a fast
-	 * synthesiser-only retune (~0.3 ms; radio_start did the calibrations).
-	 * A full driver tune here took 2.4 ms, too long inside a protocol callback. */
 	double want = slice_lo(freq_hz);
 	if (want != lo_hz) {
 		uint64_t t0 = timer_ticks();
@@ -135,12 +135,6 @@ int radio_tx(double freq_hz, const struct radio_modem *m, double dbm,
 		stats.retunes++;
 	}
 
-	if (m->baud != cur_modem.baud || m->dev_hz != cur_modem.dev_hz || m->bt != cur_modem.bt) {
-		gfsk_config(rate, m->baud, m->dev_hz, m->bt);
-		gfsk_level(DAC_DBFS, 20.0);  /* the ramp length depends on the rate */
-		cur_modem = *m;
-	}
-
 	double gain = MAX_TX_GAIN - (MAX_DBM - dbm);
 	if (gain < 0)
 		gain = 0;
@@ -151,16 +145,49 @@ int radio_tx(double freq_hz, const struct radio_modem *m, double dbm,
 		cur_gain = gain;
 	}
 
-	gfsk_channel(freq_hz - stats.lo_hz);
+	*offset = freq_hz - stats.lo_hz;
 	stats.last_freq_hz = freq_hz;
 	stats.packets++;
+	return 0;
+}
+
+/* right before a packet starts: adc_capture, if the host asked for one */
+static void capture_start(double freq_hz)
+{
 	if (capture_next) {
 		wr32(ADC_CAPTURE_BASE, 1);      /* length set by the host */
 		capture_next = 0;
 		stats.cap_lo_hz = stats.lo_hz;
 		stats.cap_freq_hz = freq_hz;
 	}
+}
+
+int radio_tx(double freq_hz, const struct radio_modem *m, double dbm,
+             const uint8_t *data, int nbits)
+{
+	double offset;
+
+	if (prepare(freq_hz, dbm, &offset))
+		return -1;
+	if (m->baud != cur_modem.baud || m->dev_hz != cur_modem.dev_hz || m->bt != cur_modem.bt) {
+		gfsk_config(rate, m->baud, m->dev_hz, m->bt);
+		gfsk_level(DAC_DBFS, 20.0);  /* the ramp length depends on the rate */
+		cur_modem = *m;
+	}
+	gfsk_channel(offset);
+	capture_start(freq_hz);
 	return gfsk_send(data, nbits);
+}
+
+int radio_tx_lora(double freq_hz, const struct lora_cfg *c, double dbm,
+                  const uint8_t *payload, int len)
+{
+	double offset;
+
+	if (prepare(freq_hz, dbm, &offset))
+		return -1;
+	capture_start(freq_hz);
+	return lora_send(rate, offset, DAC_DBFS, c, payload, len);
 }
 
 const struct radio_stats *radio_get_stats(void)

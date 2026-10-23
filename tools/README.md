@@ -16,6 +16,8 @@ board running a MultiTX bitstream.
 | [`flysky_check.py`](flysky_check.py) | the same for FlySky (AFHDS) and AFHDS2A on the virtual A7105 |
 | [`a7105_sniff.py`](a7105_sniff.py) | learns the A7105's CRC and FEC coding from a real FlySky handset; `--apply` sets it on the board |
 | [`afhds2a_bind.py`](afhds2a_bind.py) | binds an AFHDS2A receiver: catches its reply on RX2 and passes it to the virtual A7105 |
+| [`lora.py`](lora.py) | LoRa physical layer model: encoder, modulator, decoder; `decode --check` re-encodes captures symbol for symbol (checked on real SX127x recordings, [docs/lora.md](../docs/lora.md)) |
+| [`lora_check.py`](lora_check.py) | sends LoRa frames from the board (`lora_tx`), captures them on RX2 and decodes them |
 | [`sbus_monitor/`](sbus_monitor/sbus_monitor.ino) | ESP32 sketch: reads a receiver's SBUS and prints frame rate, lost frames, failsafe and channels 1–8 |
 | [`multi_link.py`](multi_link.py) | the PC as the handset: streams Multiprotocol serial frames (protocol, flags, option, 16 channels) to the firmware over USB; also importable (`MultiLink`, `Frame`) |
 | [`gamepad.py`](gamepad.py) | a gamepad as the sticks and switches for `multi_link.py --gamepad` (pygame; mapping, toggles, expo); run alone it shows your pad's input names |

@@ -22,6 +22,10 @@ int  radio_running(void);
 int  radio_tx(double freq_hz, const struct radio_modem *m, double dbm,
               const uint8_t *data, int nbits);
 int  radio_tx_busy(void);
+struct lora_cfg;
+/* A LoRa frame at freq_hz (lora_tx); 0 when started. */
+int  radio_tx_lora(double freq_hz, const struct lora_cfg *c, double dbm,
+                   const uint8_t *payload, int len);
 
 /* statistics for the shell */
 struct radio_stats {

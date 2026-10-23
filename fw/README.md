@@ -107,6 +107,8 @@ Code called from a protocol callback must not print.
 | [`ad9361_spi.c`](src/ad9361_spi.c) | AD9361 SPI through the AXI Quad SPI, hardware reset |
 | [`rf.cpp`](src/rf.cpp) | B220 glue for UHD's AD9361 driver (board parameters: port A only, CMOS, 40 MHz; SPI access; RX DC/I/Q tracking kept on) behind a C API, [`rf.h`](src/rf.h) |
 | [`axi_ad9361.c`](src/axi_ad9361.c) | FPGA side of the data port: ADI core set-up (1R1T, inverted FB_CLK), its DDS, TX source select |
+| [`lora_code.c`](src/lora_code.c) | LoRa coding: whitening, header, CRC, Hamming, interleaver, Gray (no hardware; `fw/test/test_lora_code.py` compares it with `tools/lora.py`) |
+| [`lora.c`](src/lora.c) | `lora_tx` driver: a frame's chirps, chip rate, channel offset, level |
 | [`gfsk.c`](src/gfsk.c) | `gfsk_tx` driver: Gaussian pulse table, phase increments, packets; CC2500 rate/deviation maths |
 | [`uhd_shim/`](src/uhd_shim) | stand-ins for the UHD/Boost headers the driver includes |
 | [`radio.c`](src/radio.c) | radio layer: LO slices with fast retunes, NCO offset, modem cache, power, front end |

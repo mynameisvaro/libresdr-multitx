@@ -13,6 +13,7 @@
 #include "gpio.h"
 #include "hw.h"
 #include "input.h"
+#include "lora.h"
 #include "irq.h"
 #include "rf.h"
 #include "shell.h"
@@ -569,6 +570,77 @@ static int cmd_a7105_locked(int argc, char **argv)
 	return -1;
 }
 
+/* default: like ExpressLRS 2.4 GHz at 500 Hz (SF5, BW 812.5 kHz, implicit 8-byte
+ * frames, 12 preamble chirps), but with the standard 4/6 coding: the SX1280's
+ * long-interleaving 4/6 (ELRS) is not known yet */
+static struct lora_cfg lora_cfg = {
+	.code = { .sf = 5, .cr = 2, .crc = 0, .implicit = 1, .ldro = 0 },
+	.bw = 812.5e3, .preamble = 12, .sync = 0x12, .invert_iq = 0,
+};
+
+static void lora_print_cfg(void)
+{
+	const struct lora_cfg *c = &lora_cfg;
+	printf("SF%d, BW %.1f kHz, CR 4/%d, %s, %s, preamble %d, sync %02x, IQ %s%s; "
+	       "%d chirps in the last frame, %s\n", c->code.sf, c->bw / 1e3, 4 + c->code.cr,
+	       c->code.crc ? "crc" : "nocrc", c->code.implicit ? "implicit" : "explicit",
+	       c->preamble, c->sync, c->invert_iq ? "inverted" : "normal", c->code.ldro ? ", ldro" : "",
+	       lora_last_symbols(), lora_busy() ? "busy" : "idle");
+}
+
+static int cmd_lora(int argc, char **argv)
+{
+	struct lora_cfg *c = &lora_cfg;
+	uint8_t b[255];
+
+	if (argc == 1) {
+		lora_print_cfg();
+		return 0;
+	}
+	if (!strcmp(argv[1], "cfg") && argc > 4) {
+		/* lora cfg SF BW CR [crc|nocrc] [implicit|explicit] [pre N] [sync HEX] [iqinv|iqnorm] [ldro] */
+		c->code.sf = num(argv[2]);
+		c->bw = strtod(argv[3], NULL);
+		c->code.cr = num(argv[4]);
+		c->code.ldro = 0;
+		for (int i = 5; i < argc; i++) {
+			if (!strcmp(argv[i], "crc"))           c->code.crc = 1;
+			else if (!strcmp(argv[i], "nocrc"))    c->code.crc = 0;
+			else if (!strcmp(argv[i], "implicit")) c->code.implicit = 1;
+			else if (!strcmp(argv[i], "explicit")) c->code.implicit = 0;
+			else if (!strcmp(argv[i], "iqinv"))    c->invert_iq = 1;
+			else if (!strcmp(argv[i], "iqnorm"))   c->invert_iq = 0;
+			else if (!strcmp(argv[i], "ldro"))     c->code.ldro = 1;
+			else if (!strcmp(argv[i], "pre") && i + 1 < argc)  c->preamble = num(argv[++i]);
+			else if (!strcmp(argv[i], "sync") && i + 1 < argc) c->sync = strtoul(argv[++i], NULL, 16);
+			else return -1;
+		}
+		lora_print_cfg();
+		return 0;
+	}
+	if (!strcmp(argv[1], "send") && argc > 3) {
+		/* lora send FREQ HEX [DBM]: one frame (starts the radio if needed) */
+		if (mpm_running()) {
+			printf("stop the protocol first (mpm stop)\n");
+			return 0;
+		}
+		int n = hex_bytes(argv[3], b, sizeof(b));
+		if (n < 0) {
+			printf("bad payload\n");
+			return 0;
+		}
+		if (!radio_running() && radio_start()) {
+			printf("radio start failed\n");
+			return 0;
+		}
+		double dbm = argc > 4 ? strtod(argv[4], NULL) : -10;
+		if (radio_tx_lora(strtod(argv[2], NULL), c, dbm, b, n))
+			printf("send failed (busy, or bad parameters)\n");
+		return 0;
+	}
+	return -1;
+}
+
 static int cmd_input(int argc, char **argv)
 {
 	if (argc == 1) {
@@ -612,6 +684,8 @@ static const struct shell_cmd cmds[] = {
 	{ "a7105",   "[SUBCMD ...]",   "virtual A7105: registers, last packet | coding |\n"
 	  "                             crc POLY INIT [REFLECT [XOROUT]] | fec HEX32 [lowfirst] | fec default |\n"
 	  "                             rx HEX (queue a received packet)", cmd_a7105, SHELL_LIVE },
+	{ "lora",    "[SUBCMD ...]",   "LoRa frames: cfg SF BW CR [crc|nocrc] [implicit|explicit] [pre N]\n"
+	  "                             [sync HEX] [iqinv|iqnorm] [ldro] | send FREQ HEX [DBM]", cmd_lora, 0 },
 	{ "input",   "[timeout MS]",   "handset input from the PC (Multi serial frames over USB)", cmd_input, SHELL_LIVE },
 	{ "reboot",  "",               "restart the firmware",            cmd_reboot, 0 },
 };

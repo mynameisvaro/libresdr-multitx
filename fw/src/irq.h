@@ -9,6 +9,7 @@
 #define IRQ_TIMER  1
 #define IRQ_SPI    2
 #define IRQ_GFSK   3
+#define IRQ_LORA   4
 
 void irq_init(void);                  /* INTC on, all sources masked, CPU interrupts off */
 void irq_enable_source(int n);

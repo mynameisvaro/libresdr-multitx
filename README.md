@@ -132,7 +132,9 @@ Running the board on a remote machine over USB/IP: [docs/remote-usb.md](docs/rem
 - [ ] More handset inputs: PPM from a FlySky trainer port (GPIO)
 - [ ] GFSK receive path (telemetry, bind replies)
 - [ ] NRF24L01, CYRF6936 (DSSS), SX1276 (LoRa) shims
-- [ ] ExpressLRS (LoRa first, FLRC later)
+- [x] LoRa physical layer: model checked symbol for symbol on real SX1276 recordings, `lora_tx` chirp modulator (simulated) ([docs/lora.md](docs/lora.md))
+- [ ] LoRa on the board (loopback check), then ExpressLRS at 900 MHz (standard LoRa coding)
+- [ ] ExpressLRS at 2.4 GHz: learn the SX1280's long-interleaving coding; FLRC later
 - [ ] Stand-alone boot (the board has no FPGA flash; needs a small boot host)
 
 ## Acknowledgements
