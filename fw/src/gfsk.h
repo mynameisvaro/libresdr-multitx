@@ -8,7 +8,7 @@
 
 /* Modulation for sample rate fs. bt > 0: Gaussian pulse with that BT; bt <= 0: 2-FSK. */
 void   gfsk_config(double fs, double baud, double dev_hz, double bt);
-void   gfsk_precompute(double bt);            /* pulse table ahead of time (~0.3 s) */
+void   gfsk_precompute(double bt);            /* pulse table ahead of time (~0.3 s), kept per BT */
 void   gfsk_channel(double offset_hz);        /* NCO offset from the LO, |offset| < fs/2 */
 void   gfsk_level(double dbfs, double ramp_us);
 void   gfsk_bit_order(int lsb_first);

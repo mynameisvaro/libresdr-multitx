@@ -22,7 +22,9 @@
 #define FE_FDD          0xE5        /* TX on TX/RX, RX on RX2 (docs/hardware.md) */
 #define FE_OFF          0x48
 #define PA_SETTLE_MS    500
-#define PRECOMPUTE_BT   1.0         /* the virtual CC2500's GFSK pulse (cc2500.c) */
+/* the pulse shapes the virtual chips use: CC2500 GFSK (cc2500.c), A7105 GFSK
+ * (a7105.c), 2-FSK */
+static const double precompute_bt[] = { 1.0, 0.7, 0 };
 
 /* Output level: the DAC runs at a fixed level and the AD9361 attenuator sets the
  * power. Not calibrated: MAX_DBM is a rough estimate of the output at 0 dB
@@ -67,15 +69,19 @@ int radio_start(void)
 	stats.rate_hz = rate;
 	stats.slice_hz = slice;
 	/* calibrate in the band now, not on the first packet (the driver runs its
-	 * calibrations after a retune of more than 100 MHz) */
-	if (rf_tune(RF_TX, BAND_CAL_HZ, NULL) || rf_tune(RF_RX, BAND_CAL_HZ, NULL))
+	 * calibrations after a retune of more than 100 MHz); from here on the
+	 * packets only need fast retunes */
+	double actual;
+	if (rf_tune(RF_TX, BAND_CAL_HZ, &actual) || rf_tune(RF_RX, BAND_CAL_HZ, NULL))
 		return -1;
 	cur_modem.baud = 0;              /* force a modem reload */
 	cur_gain = -1;
-	lo_hz = 0;
+	lo_hz = BAND_CAL_HZ;
+	stats.lo_hz = actual;
 	gpio_fe_set(FE_CHAN - 1, FE_FDD);
 	uint64_t t0 = timer_ticks();
-	gfsk_precompute(PRECOMPUTE_BT);  /* while the PA settles anyway */
+	for (unsigned i = 0; i < sizeof(precompute_bt) / sizeof(precompute_bt[0]); i++)
+		gfsk_precompute(precompute_bt[i]);   /* while the PA settles anyway */
 	while (timer_ticks() - t0 < TIMER_MS(PA_SETTLE_MS))
 		;
 	running = 1;
@@ -110,19 +116,16 @@ int radio_tx(double freq_hz, const struct radio_modem *m, double dbm,
 	if (!running || gfsk_busy())
 		return -1;
 
-	/* LO: retune only when the channel leaves the current slice. The first
-	 * tune goes through the driver (calibrations), the next ones are fast
-	 * synthesiser-only retunes (~0.15 ms). */
+	/* LO: retune only when the channel leaves the current slice, with a fast
+	 * synthesiser-only retune (~0.3 ms; radio_start did the calibrations).
+	 * A full driver tune here took 2.4 ms, too long inside a protocol callback. */
 	double want = slice_lo(freq_hz);
 	if (want != lo_hz) {
 		uint64_t t0 = timer_ticks();
 		double actual;
-		int first = lo_hz == 0;
-		if (first ? rf_tune(RF_TX, want, &actual)
-		          : rf_fast_tune(RF_TX, want, &actual, NULL, NULL, NULL))
+		if (rf_fast_tune(RF_TX, want, &actual, NULL, NULL, NULL))
 			return -1;
-		if (rx_follow && (first ? rf_tune(RF_RX, want, NULL)
-		                        : rf_fast_tune(RF_RX, want, NULL, NULL, NULL, NULL)))
+		if (rx_follow && rf_fast_tune(RF_RX, want, NULL, NULL, NULL, NULL))
 			return -1;
 		lo_hz = want;
 		stats.lo_hz = actual;

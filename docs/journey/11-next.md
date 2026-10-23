@@ -25,8 +25,6 @@ These are known and recorded, not forgotten:
 - ~~**Long console commands delay the protocol**~~ (chapter 10): solved in
   [chapter 12](12-timer-interrupt.md), the protocol now runs from a timer
   interrupt.
-- **One late callback at protocol start** (chapter 12): 19–22 ms with AFHDS2A at
-  4 MSPS, probably the first packet's full LO tune inside the callback.
 - **Spurs at −5 MHz and ±8 MHz** in the tone test (chapter 6).
 - **Output power** isn't calibrated; the AD9361 alone gives about +5 dBm, against
   20–30 dBm for commercial modules. A range test, then an external PA.

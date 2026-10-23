@@ -151,7 +151,7 @@ static void __attribute__((unused)) crc8_update(uint8_t byte)
 #define MPM_DEFAULT_ID 0x4D545831u      // "MTX1"
 
 static uint64_t next_cb;                // timer tick of the next callback
-static uint32_t cb_count, cb_late, cb_max_late_us;
+static uint32_t cb_count, cb_late, cb_max_late_us, cb_first_late_us, cb_max_us;
 
 static void mpm_alarm(void);
 static void mpm_stop_callbacks(void);
@@ -210,7 +210,7 @@ extern "C" int mpm_start(int proto, int sub, int rx_num, int opt, int bind)
 		multi_protocols[i].Init();
 		if (!IS_SUB_PROTO_VALID)
 			return -2;
-		cb_count = cb_late = cb_max_late_us = 0;
+		cb_count = cb_late = cb_max_late_us = cb_first_late_us = cb_max_us = 0;
 		next_cb = timer_ticks() + TIMER_US(5000);   // first callback in 5 ms
 		remote_callback = multi_protocols[i].CallBack;
 		timer_alarm_at(next_cb);
@@ -286,10 +286,14 @@ static void mpm_alarm(void)
 		cb_max_late_us = late_us;
 	if (late_us > 100)
 		cb_late++;
-	cb_count++;
+	if (!cb_count++)
+		cb_first_late_us = late_us;
 	cc2500_poll();
 	a7105_poll();
 	uint16_t next = remote_callback();
+	uint32_t took_us = (uint32_t)((timer_ticks() - now) / (CPU_HZ / 1000000u));
+	if (took_us > cb_max_us)
+		cb_max_us = took_us;
 	next_cb += TIMER_US(next);
 	if (next_cb < now)              // fell behind: resynchronise
 		next_cb = now + TIMER_US(next);
@@ -323,6 +327,8 @@ extern "C" void mpm_print_status(void)
 		       rx_id[3], RX_num);
 	printf("callbacks %lu, late (>100 us) %lu, worst %lu us\n", (unsigned long)cb_count,
 	       (unsigned long)cb_late, (unsigned long)cb_max_late_us);
+	printf("first callback %lu us late, longest callback %lu us\n",
+	       (unsigned long)cb_first_late_us, (unsigned long)cb_max_us);
 	printf("channels");
 	for (int i = 0; i < 8; i++)
 		printf(" %d", Channel_data[i]);

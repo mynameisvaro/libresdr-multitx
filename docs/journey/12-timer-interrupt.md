@@ -164,10 +164,50 @@ all correct), and `flysky_check.py` AFHDS2A (3/3).
 
 Those longer runs also showed what the new scheduler doesn't fix: **one** late
 callback right after `mpm start` (19–22 ms with AFHDS2A at 4 MSPS), before any
-other command. The likely cause is the first packet's LO tune, which goes through
-UHD's full tune path rather than the fast retune; a callback that itself takes
-that long delays the next one, interrupt or not. It's written down as open
-(chapter 11).
+other command. A callback that itself takes that long delays the next one,
+interrupt or not.
+
+### The one that was left: a slow callback at start
+
+The first guess was the first packet's LO tune, which goes through UHD's full tune
+path. But the radio's own counter said the longest retune was 4.8 ms, not 20. So
+instead of fixing the guess, two more counters went into `mpm status`: how late
+the **first** callback was, and how long the **longest** callback took.
+
+```
+first callback 2 us late, longest callback 21140 us
+```
+
+The first callback was on time; one callback *took* 21 ms. Timing the pieces of
+`radio_tx()` (temporary code, removed afterwards) split that up:
+
+| Piece | Time |
+|---|---|
+| modem set-up (`gfsk_config`) | **18.1 ms** |
+| first LO tune (UHD's full tune) | 2.4 ms |
+| TX gain | 0.03 ms |
+
+The modem set-up was the big one. `radio_start` precomputes the GFSK pulse table
+for BT 1.0, the CC2500's, while the PA settles. AFHDS2A uses plain 2-FSK (no
+Gaussian filter), so its first packet built a new table inside the callback, and
+even the trivial 2-FSK table costs 18 ms in soft-float maths. Two fixes:
+
+- [`gfsk.c`](../../fw/src/gfsk.c) keeps one table per BT, `radio_start` precomputes
+  all three the virtual chips use (1.0, 0.7 and 0), and the modulator's shape
+  memory is only rewritten when the BT changes.
+- `radio_start` already tunes in the band with the full driver tune (that's where
+  the calibrations run), so [`radio.c`](../../fw/src/radio.c) now starts from that
+  LO and every slice change is a fast retune (0.3 ms), the first one included.
+
+Result: the longest callback dropped from 21 ms to 1.2–1.8 ms, every retune is
+0.3 ms, and the longer runs show no late callback at all: AFHDS2A 3/3 packets
+decoded with a worst of 97 µs over 160,000 callbacks (during capture traffic),
+AFHDS 3/3 at 2 µs, FrSky D16 3/3 at 33 µs, and `sched_check.py` still 2 µs in all
+three phases.
+
+The lesson inside the lesson: the first guess (the LO tune) was a real cost, but
+only the smaller one. Measuring before fixing found the 18 ms that the guess
+would have missed.
 
 ## What it led to
 

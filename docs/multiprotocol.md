@@ -108,9 +108,11 @@ the command table: `help`, `info`, `md`, the `cc2500`/`a7105` displays,
 radio or changes the protocol (`mpm start`, `rf`, `ad`, `a7105 rx`, ...) runs with
 the protocol paused. Nothing in the protocol path may print.
 
-Open: right after `mpm start` there is one late callback (19–22 ms with AFHDS2A
-at 4 MSPS, before any other command). Probably the first packet's LO tune, which
-goes through the driver's full tune instead of `rf_fast_tune`.
+`mpm status` also shows how late the first callback was and how long the longest
+one took. A callback must stay well under the protocol's packet period, so
+nothing slow may happen inside one: the GFSK pulse tables for all three BTs the
+chips use are computed in `radio_start`, and every LO change is a fast retune
+(0.3 ms). Longest callback today: 1.2–1.8 ms.
 
 ## Checked without a receiver
 
@@ -290,6 +292,5 @@ with a small frequency offset as the option.
   on CN2's UART or over USB.
 - The receive path, for D8/D16 telemetry and the protocols that need replies.
 - Make the coding learned from the handset the firmware default.
-- A timing run of the A7105 protocols at 61.44 MSPS (the 4 MSPS test runs showed
-  retunes up to 4.8 ms and callbacks up to 22 ms late, probably from the capture
-  traffic).
+- A timing run of the A7105 protocols at 61.44 MSPS against a real receiver (the
+  4 MSPS decode runs now show no late callbacks).
