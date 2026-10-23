@@ -94,11 +94,23 @@ No AD9361 fastlock profiles are needed for this.
 
 ### Timing
 
-`mpm_poll()` in the main loop calls the protocol callback when its deadline comes.
-Each callback returns the delay to the next one, counted from the previous deadline
-(like Multiprotocol's `OCR1A += next_callback`), so timing doesn't drift. Measured
-over 10 s: no callback more than 100 µs late, worst 12 µs. Console output to the
-UART is buffered so it can't stall the protocol.
+The protocol callbacks run from a timer interrupt (`sys_timer`'s timer 1 as a
+one-shot alarm), so the shell and the console can't delay them. Each callback
+returns the delay to the next one, counted from the previous deadline (like
+Multiprotocol's `OCR1A += next_callback`), so timing doesn't drift.
+`tools/sched_check.py` loads the console while FrSky X runs: no callback more than
+100 µs late, worst 2 µs, also while the console output ring is full (the main-loop
+scheduler before it got 58.8 ms there).
+
+Shell commands pause the protocol (interrupts off) unless they're marked live in
+the command table: `help`, `info`, `md`, the `cc2500`/`a7105` displays,
+`mpm status`, `mpm ch`, `mpm option`, `mpm hops`. Everything that touches the
+radio or changes the protocol (`mpm start`, `rf`, `ad`, `a7105 rx`, ...) runs with
+the protocol paused. Nothing in the protocol path may print.
+
+Open: right after `mpm start` there is one late callback (19–22 ms with AFHDS2A
+at 4 MSPS, before any other command). Probably the first packet's LO tune, which
+goes through the driver's full tune instead of `rf_fast_tune`.
 
 ## Checked without a receiver
 
@@ -189,9 +201,10 @@ Measured through SBUS (ESP32 monitor below), about 1 m apart:
 | Lost | 100% | 47% | 4.3% | 1.3% | 1.4% | 1.1% | 1.1% | 1.7% | 1.9–2.6% | 7.7% | 39% | 100% |
 
 One half-second dropout to failsafe happened earlier at option 0, near a burst of
-console commands over the USB/IP tunnel. A long shell command (e.g. `mpm status`'s
-float printing) can delay a callback by ~2 ms, since the shell and the protocol
-share the main loop; that is the main suspect, not proven.
+console commands over the USB/IP tunnel. Back then the shell and the protocol
+shared the main loop, and a full console ring could delay a callback by up to
+59 ms; that was the main suspect. The protocol now runs from a timer interrupt
+(see Timing), so the console can't cause it any more.
 
 Receivers without servo outputs (XM+, R-XSR) only give SBUS. To see the channels
 and count lost frames, flash [`tools/sbus_monitor`](../tools/sbus_monitor/sbus_monitor.ino)

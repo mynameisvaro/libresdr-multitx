@@ -42,6 +42,7 @@ clock, register, AXI, block design, timing) with examples from this repository.
 | 9 | [FlySky and the coding nobody documented](09-virtual-a7105.md) | When the datasheet is missing a piece: make it settable, then learn it |
 | 10 | [A real receiver](10-real-receiver.md) | Binding an XM+, proving the link is ours, and measuring it with an ESP32 |
 | 11 | [Where it goes next](11-next.md) | Open questions and how to choose the next step |
+| 12 | [The protocol on a timer interrupt](12-timer-interrupt.md) | Measuring a 59 ms stall, then making the console unable to delay a packet |
 
 ## Timeline
 
@@ -57,3 +58,4 @@ clock, register, AXI, block design, timing) with examples from this repository.
 | 2026-10-22 12:15 | Virtual A7105: FlySky AFHDS / AFHDS2A | `bf0999c` |
 | 2026-10-22 23:52 | A real FrSky XM+ binds and holds the link | `3739e55` |
 | 2026-10-23 00:25 | Link measured: exact channels, 0.74% frames lost | `bfa6b2d` |
+| 2026-10-23 | Protocol callbacks on a timer interrupt: worst lateness 58.8 ms → 2 µs | `bc1bebd` |

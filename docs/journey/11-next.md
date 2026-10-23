@@ -22,9 +22,11 @@ These are known and recorded, not forgotten:
 - **Lost frames in pairs** (chapter 10): an XM+ quirk, or one bad hop channel?
   Logging per frame (not per second) and comparing with the 47-packet hop cycle
   would tell.
-- **Long console commands delay the protocol** (chapter 10): the shell and the
-  protocol share one loop, and `mpm status` can take ~2 ms. Options: run the
-  protocol scheduler from a timer interrupt, or split slow commands.
+- ~~**Long console commands delay the protocol**~~ (chapter 10): solved in
+  [chapter 12](12-timer-interrupt.md), the protocol now runs from a timer
+  interrupt.
+- **One late callback at protocol start** (chapter 12): 19–22 ms with AFHDS2A at
+  4 MSPS, probably the first packet's full LO tune inside the callback.
 - **Spurs at −5 MHz and ±8 MHz** in the tone test (chapter 6).
 - **Output power** isn't calibrated; the AD9361 alone gives about +5 dBm, against
   20–30 dBm for commercial modules. A range test, then an external PA.
