@@ -5,18 +5,15 @@
 #include "console.h"
 #include "gpio.h"
 #include "hw.h"
+#include "irq.h"
 #include "mpm.h"
 #include "shell.h"
 #include "timer.h"
 #include "version.h"
 
-/* Interrupts are not enabled yet; the vector at 0x10 lands here. */
-void __attribute__((interrupt_handler)) irq_handler(void)
-{
-}
-
 int main(void)
 {
+	irq_init();
 	timer_init();
 	console_init();
 	gpio_init();
@@ -25,6 +22,7 @@ int main(void)
 
 	printf("\nMultiTX firmware %s (%s)\n", FW_VERSION, FW_BUILD_DATE);
 	shell_init();
+	irq_on();           /* the protocol scheduler runs from the timer interrupt */
 
 	uint32_t last_blink = 0;
 	for (;;) {
@@ -39,7 +37,6 @@ int main(void)
 				gpio_ctrl_set(CTRL_LED);
 		}
 		shell_poll();
-		mpm_poll();
 		console_poll();
 	}
 }

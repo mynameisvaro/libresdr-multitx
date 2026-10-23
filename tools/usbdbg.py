@@ -204,18 +204,24 @@ class Console:
         return out
 
     def send(self, text):
-        for c in text.encode():
-            while True:
-                hdr = self._header()
-                if hdr is None:
-                    raise BridgeError("firmware console not running (no mailbox magic)")
-                if (self.rx_head - hdr[1]) & 0xFFFFFFFF < self.rx_size:
-                    break
+        # as many characters per round trip as the input ring has room for
+        data = text.encode()
+        while data:
+            hdr = self._header()
+            if hdr is None:
+                raise BridgeError("firmware console not running (no mailbox magic)")
+            room = self.rx_size - ((self.rx_head - hdr[1]) & 0xFFFFFFFF)
+            if room <= 0:
                 time.sleep(0.01)
-            slot = MAILBOX + self.RX_OFF + 4 * (self.rx_head % self.rx_size)
-            self.rx_head = (self.rx_head + 1) & 0xFFFFFFFF
-            self.br.transact([(OP_WRITE, 0, 1, slot, [c]),
-                              (OP_WRITE, 0, 1, MAILBOX + 16, [self.rx_head])])
+                continue
+            cmds = []
+            for c in data[:room]:
+                slot = MAILBOX + self.RX_OFF + 4 * (self.rx_head % self.rx_size)
+                self.rx_head = (self.rx_head + 1) & 0xFFFFFFFF
+                cmds.append((OP_WRITE, 0, 1, slot, [c]))
+            cmds.append((OP_WRITE, 0, 1, MAILBOX + 16, [self.rx_head]))
+            self.br.transact(cmds)
+            data = data[room:]
 
     def run(self, command, timeout=10.0):
         """Send one shell command; return its output (up to the next prompt)."""

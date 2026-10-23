@@ -29,6 +29,7 @@ _vector_hw_exception:
 	.globl	_start
 	.ent	_start
 _start:
+	msrclr	r0, 0x2                     /* interrupts off (a reboot jumps here) */
 	addik	r1, r0, _stack_top - 16     /* stack (grows down, in data_ram) */
 	addik	r2, r0, _SDA2_BASE_         /* read-only small data anchor */
 	addik	r13, r0, _SDA_BASE_         /* read-write small data anchor */

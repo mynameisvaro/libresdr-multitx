@@ -1,4 +1,6 @@
-/* Multiprotocol runner (mpm_core.cpp): starts protocols and runs their callbacks. */
+/* Multiprotocol runner (mpm_core.cpp): starts protocols and runs their callbacks
+ * from the timer interrupt. Call mpm_start, mpm_stop and anything else that
+ * touches the protocol or the radio with interrupts off (irq_save). */
 #ifndef MPM_H
 #define MPM_H
 
@@ -12,7 +14,6 @@ int  mpm_start(int proto, int sub, int rx_num, int option, int bind);
 void mpm_stop(void);
 void mpm_bind_done(void);
 int  mpm_running(void);
-void mpm_poll(void);                     /* call from the main loop */
 void mpm_set_channel(int ch, int value); /* 0..2047, 1024 = centre */
 /* option byte (FrSky: frequency fine tune) while running; protocols that re-read it
  * in their callback (CC2500_SetFreqOffset) apply it on the next packet */

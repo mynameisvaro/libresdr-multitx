@@ -12,6 +12,7 @@
 #include "radio.h"
 #include "gpio.h"
 #include "hw.h"
+#include "irq.h"
 #include "rf.h"
 #include "shell.h"
 #include "timer.h"
@@ -335,6 +336,10 @@ static int cmd_gfsk(int argc, char **argv)
 	return -1;
 }
 
+static int cmd_mpm_locked(int argc, char **argv);
+
+/* Runs live: status, ch and option don't pause the protocol (a channel value is
+ * one 16-bit store), the rest take interrupts off. */
 static int cmd_mpm(int argc, char **argv)
 {
 	if (argc < 2)
@@ -345,6 +350,54 @@ static int cmd_mpm(int argc, char **argv)
 		mpm_list();
 		return 0;
 	}
+	if (!strcmp(sub, "ch") && argc > 3) {
+		/* mpm ch N VALUE: channel 1..16, 0..2047 (1024 centre, 204/1844 = -/+100%) */
+		mpm_set_channel(num(argv[2]) - 1, num(argv[3]));
+		return 0;
+	}
+	if (!strcmp(sub, "option") && argc > 2) {
+		/* mpm option N: -128..127, e.g. FrSky frequency fine tune while running */
+		mpm_set_option(strtol(argv[2], NULL, 0));
+		return 0;
+	}
+	if (!strcmp(sub, "hops")) {
+		int n;
+		const uint8_t *h = mpm_hopping_table(&n);
+		for (int i = 0; i < n; i++)
+			printf("%s%d", i ? " " : "", h[i]);
+		printf("\n");
+		return 0;
+	}
+	if (!strcmp(sub, "status")) {
+		const struct radio_stats *r = radio_get_stats();
+		const struct cc2500_info *c = cc2500_get_info();
+		mpm_print_status();
+		printf("radio %s, %lu packets, LO %.3f MHz, %lu retunes (last %lu us, max %lu us)\n",
+		       radio_running() ? "on" : "off", (unsigned long)r->packets, r->lo_hz / 1e6,
+		       (unsigned long)r->retunes, (unsigned long)r->last_retune_us,
+		       (unsigned long)r->max_retune_us);
+		printf("rate %.0f, slice %.0f, capture LO %.0f, capture freq %.0f\n", r->rate_hz,
+		       r->slice_hz, r->cap_lo_hz, r->cap_freq_hz);
+		printf("cc2500 state 0x%02x, %lu packets, %lu errors, last %.4f MHz, %.0f baud, dev %.0f Hz\n",
+		       c->marcstate, (unsigned long)c->tx_packets, (unsigned long)c->tx_errors,
+		       c->last_freq_hz / 1e6, c->baud, c->dev_hz);
+		const struct a7105_info *a = a7105_get_info();
+		printf("a7105 state 0x%02x, %lu packets, %lu errors, %lu received, last %.4f MHz, "
+		       "%.0f baud, dev %.0f Hz, %d bits\n", a->state, (unsigned long)a->tx_packets,
+		       (unsigned long)a->tx_errors, (unsigned long)a->rx_packets, a->last_freq_hz / 1e6,
+		       a->baud, a->dev_hz, a->last_bits);
+		return 0;
+	}
+	uint32_t msr = irq_save();
+	int ret = cmd_mpm_locked(argc, argv);
+	irq_restore(msr);
+	return ret;
+}
+
+static int cmd_mpm_locked(int argc, char **argv)
+{
+	const char *sub = argv[1];
+
 	if (!strcmp(sub, "start") && argc > 2) {
 		/* mpm start PROTO [SUB [RX [OPTION [bind]]]] */
 		int proto = mpm_proto_by_name(argv[2]);
@@ -379,16 +432,6 @@ static int cmd_mpm(int argc, char **argv)
 		radio_stop();
 		return 0;
 	}
-	if (!strcmp(sub, "ch") && argc > 3) {
-		/* mpm ch N VALUE: channel 1..16, 0..2047 (1024 centre, 204/1844 = -/+100%) */
-		mpm_set_channel(num(argv[2]) - 1, num(argv[3]));
-		return 0;
-	}
-	if (!strcmp(sub, "option") && argc > 2) {
-		/* mpm option N: -128..127, e.g. FrSky frequency fine tune while running */
-		mpm_set_option(strtol(argv[2], NULL, 0));
-		return 0;
-	}
 	if (!strcmp(sub, "id") && argc > 2) {
 		mpm_set_id(num(argv[2]));
 		return 0;
@@ -396,34 +439,6 @@ static int cmd_mpm(int argc, char **argv)
 	if (!strcmp(sub, "rxid") && argc > 2) {
 		/* mpm rxid HEX [RX]: AFHDS2A receiver ID (learned when binding) */
 		mpm_set_afhds2a_rxid(argc > 3 ? (int)num(argv[3]) : 0, strtoul(argv[2], NULL, 16));
-		return 0;
-	}
-	if (!strcmp(sub, "hops")) {
-		int n;
-		const uint8_t *h = mpm_hopping_table(&n);
-		for (int i = 0; i < n; i++)
-			printf("%s%d", i ? " " : "", h[i]);
-		printf("\n");
-		return 0;
-	}
-	if (!strcmp(sub, "status")) {
-		const struct radio_stats *r = radio_get_stats();
-		const struct cc2500_info *c = cc2500_get_info();
-		mpm_print_status();
-		printf("radio %s, %lu packets, LO %.3f MHz, %lu retunes (last %lu us, max %lu us)\n",
-		       radio_running() ? "on" : "off", (unsigned long)r->packets, r->lo_hz / 1e6,
-		       (unsigned long)r->retunes, (unsigned long)r->last_retune_us,
-		       (unsigned long)r->max_retune_us);
-		printf("rate %.0f, slice %.0f, capture LO %.0f, capture freq %.0f\n", r->rate_hz,
-		       r->slice_hz, r->cap_lo_hz, r->cap_freq_hz);
-		printf("cc2500 state 0x%02x, %lu packets, %lu errors, last %.4f MHz, %.0f baud, dev %.0f Hz\n",
-		       c->marcstate, (unsigned long)c->tx_packets, (unsigned long)c->tx_errors,
-		       c->last_freq_hz / 1e6, c->baud, c->dev_hz);
-		const struct a7105_info *a = a7105_get_info();
-		printf("a7105 state 0x%02x, %lu packets, %lu errors, %lu received, last %.4f MHz, "
-		       "%.0f baud, dev %.0f Hz, %d bits\n", a->state, (unsigned long)a->tx_packets,
-		       (unsigned long)a->tx_errors, (unsigned long)a->rx_packets, a->last_freq_hz / 1e6,
-		       a->baud, a->dev_hz, a->last_bits);
 		return 0;
 	}
 	return -1;
@@ -487,11 +502,11 @@ static void a7105_print_coding(void)
 	printf(" %s\n", c->fec_low_first ? "lowfirst" : "highfirst");
 }
 
+static int cmd_a7105_locked(int argc, char **argv);
+
+/* Runs live for the displays; changes to the chip take interrupts off. */
 static int cmd_a7105(int argc, char **argv)
 {
-	struct a7105_coding *c = a7105_coding();
-	uint8_t b[64];
-
 	if (argc == 1) {
 		const struct a7105_info *a = a7105_get_info();
 		const uint8_t *r = a7105_regs();
@@ -510,6 +525,17 @@ static int cmd_a7105(int argc, char **argv)
 		a7105_print_coding();
 		return 0;
 	}
+	uint32_t msr = irq_save();
+	int ret = cmd_a7105_locked(argc, argv);
+	irq_restore(msr);
+	return ret;
+}
+
+static int cmd_a7105_locked(int argc, char **argv)
+{
+	struct a7105_coding *c = a7105_coding();
+	uint8_t b[64];
+
 	if (!strcmp(argv[1], "crc") && argc > 3) {
 		c->crc_poly = strtoul(argv[2], NULL, 16);
 		c->crc_init = strtoul(argv[3], NULL, 16);
@@ -548,28 +574,28 @@ static int cmd_reboot(int argc, char **argv)
 }
 
 static const struct shell_cmd cmds[] = {
-	{ "help",    "",               "this list",                       cmd_help },
-	{ "info",    "",               "version, uptime, memory",         cmd_info },
-	{ "md",      "ADDR [N]",       "read N 32-bit words",             cmd_md },
-	{ "mw",      "ADDR VALUE...",  "write 32-bit words",              cmd_mw },
-	{ "ad",      "REG [VALUE]",    "AD9361 register read / write",    cmd_ad },
-	{ "adreset", "",               "pulse AD9361 RESETB, read the ID", cmd_adreset },
+	{ "help",    "",               "this list",                       cmd_help, SHELL_LIVE },
+	{ "info",    "",               "version, uptime, memory",         cmd_info, SHELL_LIVE },
+	{ "md",      "ADDR [N]",       "read N 32-bit words",             cmd_md, SHELL_LIVE },
+	{ "mw",      "ADDR VALUE...",  "write 32-bit words",              cmd_mw, 0 },
+	{ "ad",      "REG [VALUE]",    "AD9361 register read / write",    cmd_ad, 0 },
+	{ "adreset", "",               "pulse AD9361 RESETB, read the ID", cmd_adreset, 0 },
 	{ "rf",      "SUBCMD ...",     "AD9361: init | rate [HZ] | freq rx|tx [HZ] |\n"
-	  "                             gain rx|tx DB | bw rx|tx HZ | rssi | temp | loopback 0|1", cmd_rf },
-	{ "fe",      "1|2 STATE|WORD", "front end: off | rx2 | rx | tx | fdd, or a raw word", cmd_fe },
-	{ "dds",     "HZ [DBFS] | off", "TX1 test tone from the FPGA DDS (default -12 dBFS)", cmd_dds },
+	  "                             gain rx|tx DB | bw rx|tx HZ | rssi | temp | loopback 0|1", cmd_rf, 0 },
+	{ "fe",      "1|2 STATE|WORD", "front end: off | rx2 | rx | tx | fdd, or a raw word", cmd_fe, 0 },
+	{ "dds",     "HZ [DBFS] | off", "TX1 test tone from the FPGA DDS (default -12 dBFS)", cmd_dds, 0 },
 	{ "gfsk",    "SUBCMD ...",     "modulator: cfg BAUD DEV [BT] | cc2500 d8|d16 | chan HZ |\n"
-	  "                             level DBFS [RAMP_US] | cw on|off | send [-c] HEX | status", cmd_gfsk },
+	  "                             level DBFS [RAMP_US] | cw on|off | send [-c] HEX | status", cmd_gfsk, 0 },
 	{ "mpm",     "SUBCMD ...",     "Multiprotocol: list | start PROTO [SUB [RX [OPT [bind]]]] |\n"
 	  "                             binddone | stop | ch N VALUE | option N | id HEX |\n"
 	  "                             rxid HEX [RX] |\n"
-	  "                             hops | status", cmd_mpm },
-	{ "radio",   "SUBCMD ...",     "rate HZ | start | stop | rxfollow 0|1 | capture (next packet)", cmd_radio },
-	{ "cc2500",  "",               "virtual CC2500 registers and last packet", cmd_cc2500 },
+	  "                             hops | status", cmd_mpm, SHELL_LIVE },
+	{ "radio",   "SUBCMD ...",     "rate HZ | start | stop | rxfollow 0|1 | capture (next packet)", cmd_radio, 0 },
+	{ "cc2500",  "",               "virtual CC2500 registers and last packet", cmd_cc2500, SHELL_LIVE },
 	{ "a7105",   "[SUBCMD ...]",   "virtual A7105: registers, last packet | coding |\n"
 	  "                             crc POLY INIT [REFLECT [XOROUT]] | fec HEX32 [lowfirst] | fec default |\n"
-	  "                             rx HEX (queue a received packet)", cmd_a7105 },
-	{ "reboot",  "",               "restart the firmware",            cmd_reboot },
+	  "                             rx HEX (queue a received packet)", cmd_a7105, SHELL_LIVE },
+	{ "reboot",  "",               "restart the firmware",            cmd_reboot, 0 },
 };
 
 static int cmd_help(int argc, char **argv)
@@ -590,7 +616,11 @@ static void execute(char *s)
 		return;
 	for (unsigned i = 0; i < sizeof(cmds) / sizeof(cmds[0]); i++) {
 		if (!strcmp(argv[0], cmds[i].name)) {
-			if (cmds[i].fn(argc, argv) < 0)
+			uint32_t msr = cmds[i].flags & SHELL_LIVE ? 0 : irq_save();
+			int ret = cmds[i].fn(argc, argv);
+			if (!(cmds[i].flags & SHELL_LIVE))
+				irq_restore(msr);
+			if (ret < 0)
 				printf("usage: %s %s\n", cmds[i].name, cmds[i].args);
 			return;
 		}

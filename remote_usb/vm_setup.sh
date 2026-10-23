@@ -18,7 +18,8 @@ CONF_DIR=/etc/usbip-tunnel
 [ "$(id -u)" -eq 0 ] || { echo "run with sudo"; exit 1; }
 
 echo "== Installing usbip tools"
-apt-get update -qq
+# (a broken third-party repository must not stop the setup)
+apt-get update -qq || echo "== apt-get update reported errors, continuing"
 apt-get install -y -qq linux-tools-common "linux-tools-$(uname -r)" linux-tools-generic usbutils openssh-client
 if ! modprobe usbip-host 2>/dev/null; then
     apt-get install -y -qq "linux-modules-extra-$(uname -r)"

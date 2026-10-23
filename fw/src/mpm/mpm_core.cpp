@@ -153,6 +153,9 @@ static void __attribute__((unused)) crc8_update(uint8_t byte)
 static uint64_t next_cb;                // timer tick of the next callback
 static uint32_t cb_count, cb_late, cb_max_late_us;
 
+static void mpm_alarm(void);
+static void mpm_stop_callbacks(void);
+
 static void modules_reset(void)
 {
 	CC2500_Reset();
@@ -162,6 +165,7 @@ static void modules_reset(void)
 
 extern "C" void mpm_init(void)
 {
+	timer_alarm_fn(mpm_alarm);
 	MProtocol_id_master = MPM_DEFAULT_ID;
 	for (int i = 0; i < NUM_CHN; i++)
 		Channel_data[i] = CHANNEL_MID;
@@ -175,7 +179,7 @@ extern "C" void mpm_set_id(uint32_t id)
 
 extern "C" int mpm_start(int proto, int sub, int rx_num, int opt, int bind)
 {
-	remote_callback = 0;
+	mpm_stop_callbacks();
 	protocol = proto;
 	sub_protocol = sub;
 	RX_num = rx_num & 0x3F;
@@ -206,17 +210,26 @@ extern "C" int mpm_start(int proto, int sub, int rx_num, int opt, int bind)
 		multi_protocols[i].Init();
 		if (!IS_SUB_PROTO_VALID)
 			return -2;
-		remote_callback = multi_protocols[i].CallBack;
-		next_cb = 0;                    // first callback 5 ms after the first poll
 		cb_count = cb_late = cb_max_late_us = 0;
+		next_cb = timer_ticks() + TIMER_US(5000);   // first callback in 5 ms
+		remote_callback = multi_protocols[i].CallBack;
+		timer_alarm_at(next_cb);
 		return 0;
 	}
 	return -1;
 }
 
-extern "C" void mpm_stop(void)
+// The callbacks run from the timer interrupt, so the shell holds interrupts off
+// (irq_save) around the commands that change the protocol or touch the radio.
+static void mpm_stop_callbacks(void)
 {
 	remote_callback = 0;
+	timer_alarm_cancel();
+}
+
+extern "C" void mpm_stop(void)
+{
+	mpm_stop_callbacks();
 	CC2500_Strobe(CC2500_SIDLE);
 	A7105_Strobe(A7105_STANDBY);
 }
@@ -255,32 +268,32 @@ extern "C" int mpm_running(void)
 	return remote_callback != 0;
 }
 
-// Run the protocol callback when its time has come. The callbacks return the
-// delay to the next one in microseconds, measured from the previous deadline
-// (like OCR1A += next_callback), so timing does not drift.
-extern "C" void mpm_poll(void)
+// Run the protocol callback when its time has come: the timer alarm calls this
+// from the interrupt, so the console and the shell can't delay it. The callbacks
+// return the delay to the next one in microseconds, measured from the previous
+// deadline (like OCR1A += next_callback), so timing does not drift.
+static void mpm_alarm(void)
 {
-	cc2500_poll();
-	a7105_poll();
 	if (!remote_callback)
 		return;
 	uint64_t now = timer_ticks();
-	if (!next_cb) {
-		next_cb = now + TIMER_US(5000);
+	if (now < next_cb) {            // (an alarm longer than the 32-bit timer)
+		timer_alarm_at(next_cb);
 		return;
 	}
-	if (now < next_cb)
-		return;
 	uint32_t late_us = (uint32_t)((now - next_cb) / (CPU_HZ / 1000000u));
 	if (late_us > cb_max_late_us)
 		cb_max_late_us = late_us;
 	if (late_us > 100)
 		cb_late++;
 	cb_count++;
+	cc2500_poll();
+	a7105_poll();
 	uint16_t next = remote_callback();
 	next_cb += TIMER_US(next);
 	if (next_cb < now)              // fell behind: resynchronise
 		next_cb = now + TIMER_US(next);
+	timer_alarm_at(next_cb);
 }
 
 extern "C" void mpm_set_channel(int ch, int value)
