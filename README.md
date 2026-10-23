@@ -128,7 +128,8 @@ Running the board on a remote machine over USB/IP: [docs/remote-usb.md](docs/rem
 - [ ] FlySky with a real handset (learn the A7105 coding) and receivers
 - [x] Protocol callbacks on a timer interrupt: the console can't delay a packet ([journey ch. 12](docs/journey/12-timer-interrupt.md))
 - [x] Handset input from the PC: Multiprotocol serial frames over USB ([`multi_link.py`](tools/multi_link.py), [docs](docs/multiprotocol.md#handset-input-from-the-pc))
-- [ ] More handset inputs: PPM from a FlySky trainer port (GPIO), gamepad on the PC
+- [x] A gamepad on the PC as the sticks ([`multi_link.py --gamepad`](tools/gamepad.py))
+- [ ] More handset inputs: PPM from a FlySky trainer port (GPIO)
 - [ ] GFSK receive path (telemetry, bind replies)
 - [ ] NRF24L01, CYRF6936 (DSSS), SX1276 (LoRa) shims
 - [ ] ExpressLRS (LoRa first, FLRC later)

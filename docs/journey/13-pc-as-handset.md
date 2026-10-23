@@ -108,9 +108,32 @@ the firmware had taken two new frames before checking. 8/8.
 Streaming frames from `multi_link.py` made no callback late (worst 2 µs), and the
 option (−40) and channel values (1600 µs → 1184, −50% → 614) arrived exactly.
 
+## A gamepad as the sticks
+
+Typing channel values isn't flying. [`gamepad.py`](../../tools/gamepad.py) reads a
+gamepad through pygame (SDL underneath, so the same code works on Linux, macOS and
+Windows, and common pads get standard input names). It's in two parts on purpose:
+
+- **`Mapping`** is pure: a dict of inputs in (`{"rightx": 0.5, "a": True}`), 16
+  channel values out. Deadband, expo, end points, inverting, and buttons as
+  momentary or latching switches. Because it touches no hardware, it has unit
+  tests ([`test_gamepad.py`](../../tools/test_gamepad.py)).
+- **`Gamepad`** just reads the pad into that dict.
+
+Two safety habits from real radios came along: nothing is sent until the
+throttle stick is low, and if the pad disconnects, sending stops, so the firmware's
+link-loss pause puts the receiver in failsafe.
+
+To test without a real gamepad, a virtual Xbox 360 pad was created with Linux
+`uinput`, holding known stick positions and tapping A once. The first run read
+seven of eight channels right; the latching switch on A missed its tap. Over the
+tunnel the pad was sampled once per frame (about once a second), and the 0.3 s tap
+fell between two samples. The fix counts SDL's button-press **events** instead of
+comparing samples, so no tap is lost at any frame rate. Second run: 8/8.
+
 ## What it led to
 
-The PC can now fly the board. Next on this path: PPM from the FlySky's trainer
+The PC can now fly the board, from a gamepad. Next on this path: PPM from the FlySky's trainer
 port on a GPIO pin, turned into the same frames; and, for ExpressLRS later, CRSF,
 which is what EdgeTX speaks to an ELRS module.
 

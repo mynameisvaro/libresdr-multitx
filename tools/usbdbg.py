@@ -236,7 +236,9 @@ class Console:
             if not data:
                 time.sleep(0.005)
         text = out[:-len(PROMPT)].decode(errors="replace").replace("\r\n", "\n")
-        return text.split("\n", 1)[1] if text.startswith(command) else text
+        # drop an echo of the command line (UART-style), not output that merely
+        # starts with the command's name ("input console, ...")
+        return text.split("\n", 1)[1] if text.startswith(command + "\n") else text
 
 
 def console(br, commands):

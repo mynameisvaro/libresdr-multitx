@@ -18,6 +18,8 @@ board running a MultiTX bitstream.
 | [`afhds2a_bind.py`](afhds2a_bind.py) | binds an AFHDS2A receiver: catches its reply on RX2 and passes it to the virtual A7105 |
 | [`sbus_monitor/`](sbus_monitor/sbus_monitor.ino) | ESP32 sketch: reads a receiver's SBUS and prints frame rate, lost frames, failsafe and channels 1–8 |
 | [`multi_link.py`](multi_link.py) | the PC as the handset: streams Multiprotocol serial frames (protocol, flags, option, 16 channels) to the firmware over USB; also importable (`MultiLink`, `Frame`) |
+| [`gamepad.py`](gamepad.py) | a gamepad as the sticks and switches for `multi_link.py --gamepad` (pygame; mapping, toggles, expo); run alone it shows your pad's input names |
+| [`test_gamepad.py`](test_gamepad.py) | unit tests for the gamepad mapping (no hardware) |
 | [`input_check.py`](input_check.py) | checks the handset input path: protocol start from a frame, exact channels, bind flag, link-loss pause and resume, protocol switch |
 | [`sched_check.py`](sched_check.py) | runs a protocol while loading the console (busy, and with the output ring full) and checks that no callback is late |
 | [`sbus_tune.py`](sbus_tune.py) | logs the SBUS monitor from its serial port and sweeps the FrSky frequency fine tune (`mpm option`) against the lost-frame rate |

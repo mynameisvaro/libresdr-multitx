@@ -168,6 +168,25 @@ python3 tools/multi_link.py frskyx --option -40 --ch 1=1600us 2=-50% 5=100%
 python3 tools/multi_link.py frskyx --bind --seconds 10     # bind, then run without --bind
 ```
 
+With a gamepad on the PC (`pip install pygame`; Xbox, PlayStation, Switch Pro and
+most clones get standard input names on Linux, macOS and Windows):
+
+```bash
+python3 tools/gamepad.py                               # see the pad's input names
+python3 tools/multi_link.py frskyx --gamepad --expo 0.3
+python3 tools/multi_link.py frskyx --gamepad --map "1=rightx 2=-righty 3=-lefty 4=leftx 5=leftshoulder:toggle"
+```
+
+The default mapping is mode 2 in Multiprotocol's AETR order (right stick
+aileron/elevator, left stick throttle/rudder), A/B/X/Y as latching switches on
+channels 5–8 and the triggers on 9–10; holding Back sets the bind flag. As with a
+radio's throttle warning, nothing is sent until the throttle stick is low, and if
+the pad disconnects `multi_link.py` stops sending, so the protocol pauses and the
+receiver goes to failsafe. Toggles count the pad's button-press events, so a tap
+shorter than the frame interval isn't lost. Checked with a virtual Xbox 360 pad
+(Linux uinput) holding known positions: all 8 channels read back exactly in
+`mpm status`, and unplugging it stopped the frames.
+
 The firmware parses them with code ported from Multiprotocol's
 `update_serial_data()` (fw/src/input.c, `mpm_serial_frame` in mpm_core.cpp), so the
 rules are Multiprotocol's: a new protocol / sub-protocol / RX number restarts the
@@ -323,7 +342,7 @@ with a small frequency offset as the option.
 ## Next
 
 - More handset inputs: PPM from a FlySky trainer port on the GPIO pins (the
-  frames over USB are done), a gamepad on the PC through `multi_link.py`.
+  frames over USB and the gamepad are done).
 - The receive path, for D8/D16 telemetry and the protocols that need replies.
 - Make the coding learned from the handset the firmware default.
 - A timing run of the A7105 protocols at 61.44 MSPS against a real receiver (the
