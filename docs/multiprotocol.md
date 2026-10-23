@@ -234,7 +234,8 @@ higher.
 `ppm_in` has a built-in PPM generator that can replace the pin, so the whole path
 is checked without a radio: `ppm test 1000 1500 2000 ...` sets its channel widths,
 `ppm test off` returns to the pin. `tools/ppm_check.py` uses it. (Status: the
-testbench passes 11/11; the board check and a real radio are still to do.)
+testbench passes 11/11 and `ppm_check.py` 6/6 on the board; a real radio is
+still to do.)
 
 ## Testing with a FrSky receiver
 

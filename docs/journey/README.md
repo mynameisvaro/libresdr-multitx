@@ -64,3 +64,4 @@ clock, register, AXI, block design, timing) with examples from this repository.
 | 2026-10-23 | No slow work inside callbacks: longest 21 ms → 1.5 ms | `61d3f92` |
 | 2026-10-23 | Handset input from the PC: Multi serial frames over USB | `5f8649d` |
 | 2026-10-23 | LoRa: model reproduces 68/68 real SX1276 frames; lora_tx 30/31 frames on the board | `a2e94e5`, `99ce770` |
+| 2026-10-23 | PPM input from a radio's trainer port: 6/6 on the board with the built-in generator | `d940810` |

@@ -159,10 +159,18 @@ first edge after power-up can't be trusted, since nothing says how long the line
 was idle before it. Multiprotocol behaves the same way; the first version of the
 test didn't.
 
+On the board, [`ppm_check.py`](../../tools/ppm_check.py) passes 6/6 with the
+generator switched in: the decoder measures every width to within 0.5 µs, the
+channel values match Multiprotocol's mapping exactly (including 900 and 2100 µs,
+outside ±100%, which land at 64 and 1984), new widths follow, the protocol
+pauses when frames stop and resumes when they return, and no callback ran late.
+A FrSky D16 run afterwards still decoded 10/10 packets, so the new block broke
+nothing. What's left is the radio itself, once its PPM level is measured.
+
 ## What it led to
 
-The PC can now fly the board, from a gamepad. Next on this path: PPM from the FlySky's trainer
-port on a GPIO pin, turned into the same frames; and, for ExpressLRS later, CRSF,
+The PC can now fly the board, from a gamepad. Next on this path: the FlySky itself on the trainer
+port, through the PPM input that's now proven with the generator; and, for ExpressLRS later, CRSF,
 which is what EdgeTX speaks to an ELRS module.
 
 ## The thinking move
