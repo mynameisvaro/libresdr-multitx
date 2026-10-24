@@ -801,6 +801,17 @@ static int cmd_elrs(int argc, char **argv)
 	return 0;
 }
 
+#define GRX_LOG_MAX   96
+#define GRX_LOG_BYTES 72                /* an AFHDS2A packet with FEC: 40 x 14 bits */
+struct grx_log_entry {
+	uint32_t tstamp, level;
+	int32_t  offset_hz;
+	uint8_t  syncerr, len;
+	uint8_t  bits[GRX_LOG_BYTES];
+};
+static struct grx_log_entry grx_log[GRX_LOG_MAX];
+static int grx_log_n, grx_log_first;
+
 static int cmd_grx(int argc, char **argv)
 {
 	if (!gfsk_rx_present()) {
@@ -836,6 +847,98 @@ static int cmd_grx(int argc, char **argv)
 		}
 		if (radio_rx(strtod(argv[2], NULL), &c))
 			printf("arm failed\n");
+		return 0;
+	}
+	if (!strcmp(argv[1], "log") && argc > 6) {
+		/* grx log FREQ BAUD SYNC NBITS SECONDS [TRIG_BIT TRIG_HEX [POST]]: every
+		 * packet in a row, re-armed right after each one (a few us), so a reply
+		 * that follows a packet is caught too. A ring: it keeps the last
+		 * GRX_LOG_MAX. With a trigger it stops POST packets (default 16) after
+		 * the first one whose kept bits from TRIG_BIT on differ from TRIG_HEX.
+		 * Read them, oldest first, with grx dump I. */
+		struct gfsk_rx_cfg c = {
+			.baud = strtod(argv[3], NULL), .sync = strtoul(argv[4], NULL, 16), .mask = 0xFFFFFFFF,
+			.maxerr = 2, .invert = 0, .nbits = (int)num(argv[5]),
+		};
+		double freq = strtod(argv[2], NULL);
+		int trig_bit = -1, trig_n = 0, post = 16, left = -1;
+		uint8_t trig[16];
+		if (argc > 8) {
+			trig_bit = (int)num(argv[7]);
+			trig_n = 4 * (int)strlen(argv[8]);
+			if (trig_n > 8 * (int)sizeof(trig) || parse_hex(1, argv + 8, trig, sizeof(trig)) <= 0) {
+				printf("bad trigger pattern\n");
+				return 0;
+			}
+			if (argc > 9)
+				post = (int)num(argv[9]);
+		}
+		if (!radio_running() && radio_start()) {
+			printf("radio start failed\n");
+			return 0;
+		}
+		grx_log_n = grx_log_first = 0;
+		uint32_t seen = 0;
+		int trig_at = -1;
+		uint64_t end = timer_ticks() + TIMER_MS((uint64_t)(strtod(argv[6], NULL) * 1000));
+		if (radio_rx(freq, &c)) {
+			printf("arm failed\n");
+			return 0;
+		}
+		while (left && timer_ticks() < end) {
+			if (!gfsk_rx_done())
+				continue;
+			int slot = (grx_log_first + grx_log_n) % GRX_LOG_MAX;
+			if (grx_log_n < GRX_LOG_MAX)
+				grx_log_n++;
+			else
+				grx_log_first = (grx_log_first + 1) % GRX_LOG_MAX;
+			struct grx_log_entry *e = &grx_log[slot];
+			uint8_t b[GFSK_RX_BUF_BYTES];
+			struct gfsk_rx_result r;
+			int n = gfsk_rx_read(b, sizeof(b), &r);
+			radio_rx(freq, &c);
+			seen++;
+			e->tstamp = r.tstamp;
+			e->offset_hz = (int32_t)r.offset_hz;
+			e->level = r.level;
+			e->syncerr = (uint8_t)r.syncerr;
+			e->len = (uint8_t)(n < GRX_LOG_BYTES ? n : GRX_LOG_BYTES);
+			memcpy(e->bits, b, e->len);
+			if (left > 0)
+				left--;
+			else if (trig_bit >= 0) {
+				for (int k = 0; k < trig_n; k++) {
+					int i = trig_bit + k;
+					int got = i < 8 * n ? (b[i >> 3] >> (7 - (i & 7))) & 1 : 0;
+					if (got != ((trig[k >> 3] >> (7 - (k & 7))) & 1)) {
+						left = post;
+						trig_at = (int)seen;
+						break;
+					}
+				}
+			}
+		}
+		radio_rx_stop();
+		printf("%d packets kept of %lu", grx_log_n, (unsigned long)seen);
+		if (trig_at > 0)
+			printf(", trigger at packet %d (entry %d)", trig_at, grx_log_n - 1 - (int)(seen - (uint32_t)trig_at));
+		printf("\n");
+		return 0;
+	}
+	if (!strcmp(argv[1], "dump") && argc > 2) {
+		/* grx dump I: tstamp (samples), offset Hz, level, sync errors, bits (hex) */
+		int i = (int)num(argv[2]);
+		if (i >= grx_log_n) {
+			printf("no entry %d (%d logged)\n", i, grx_log_n);
+			return 0;
+		}
+		struct grx_log_entry *e = &grx_log[(grx_log_first + i) % GRX_LOG_MAX];
+		printf("%lu %ld %lu %u ", (unsigned long)e->tstamp, (long)e->offset_hz,
+		       (unsigned long)e->level, e->syncerr);
+		for (int k = 0; k < e->len; k++)
+			printf("%02x", e->bits[k]);
+		printf("\n");
 		return 0;
 	}
 	if (!strcmp(argv[1], "stop")) {
@@ -890,6 +993,7 @@ static const struct shell_cmd cmds[] = {
 	  "                             domain NAME | switch 0|1|2 | tlm std|off|N | modelmatch on|off |\n"
 	  "                             power DBM | capsync (capture the next sync packet)", cmd_elrs, SHELL_LIVE },
 	{ "grx",     "[SUBCMD ...]",   "GFSK receiver: status (+ bits) | arm FREQ BAUD SYNC NBITS [MAXERR [MASK]] |\n"
+	  "                             log FREQ BAUD SYNC NBITS SECONDS [TRIG_BIT TRIG_HEX [POST]] | dump I |\n"
 	  "                             stop | minlevel [N]", cmd_grx, 0 },
 	{ "reboot",  "",               "restart the firmware",            cmd_reboot, 0 },
 };
