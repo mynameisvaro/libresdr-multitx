@@ -59,6 +59,14 @@ def encode(cmds, seq):
     return _w64((seq << 16) | (len(body) + 8), MAGIC_CMD) + body
 
 
+def response_bytes(cmds):
+    """Length of the response packet to cmds."""
+    words = 1 + 1                       # header, END
+    for op, flags, count, addr, _ in cmds:
+        words += {OP_READ: (count + 1) // 2, OP_CTRL_RD: 1}.get(op, 0) + 1
+    return 8 * words
+
+
 def decode(cmds, seq, raw):
     """Parse a response packet into (op, err, count, addr, data_words) per command."""
     words = [struct.unpack_from("<II", raw, i) for i in range(0, len(raw) - 7, 8)]
@@ -99,8 +107,29 @@ class Bridge:
         """cmds: list of (op, flags, count, addr, data_words). Returns a list of
         (op, err, count, addr, data_words) in the same order."""
         self.seq = (self.seq + 1) & 0xFFF
+        # A transfer that is a whole number of max-size packets (1024 B at
+        # SuperSpeed, 512 at high speed) has no short packet to end it, and the
+        # receiving side waits for more: the bridge never got such a command (a
+        # 251-word write, 2026-10-24). Status reads make the command and the
+        # response longer until neither is; their results are dropped.
+        cmds = list(cmds)
+        npad = 0
+        while len(encode(cmds, self.seq)) % 512 == 0 or response_bytes(cmds) % 512 == 0:
+            cmds.append((OP_CTRL_RD, 0, 0, 0, None))
+            npad += 1
         self.dev.write(EP_OUT, encode(cmds, self.seq), self.timeout)
-        return decode(cmds, self.seq, bytes(self.dev.read(EP_IN, 16384, self.timeout)))
+        # A response to an earlier process's command that timed out can still be
+        # waiting: skip responses with another sequence number.
+        for _ in range(8):
+            raw = bytes(self.dev.read(EP_IN, 16384, self.timeout))
+            if len(raw) >= 8:
+                magic, seq = struct.unpack_from("<II", raw)
+                if magic == MAGIC_RSP and (seq & 0xFFF) != self.seq:
+                    continue
+            res = decode(cmds, self.seq, raw)
+            return res[:len(res) - npad]
+        raise BridgeError("only stale responses")
+
     def _check(self, results):
         for op, err, count, addr, _ in results:
             if err:

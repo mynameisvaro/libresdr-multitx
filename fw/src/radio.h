@@ -18,6 +18,9 @@ void radio_set_rate(double hz);      /* before radio_start; default 61.44 MSPS *
  * and an LO slice is centred on it. Retunes with calibrations if running. */
 int  radio_set_band(double hz);
 void radio_rx_follow(int on);        /* tune the RX LO with the TX LO (for captures) */
+/* dB added to the power every protocol asks for (the output isn't calibrated) */
+void radio_set_power_offset(double db);
+double radio_power_offset(void);
 void radio_capture_next(void);       /* start adc_capture with the next packet */
 void radio_stop(void);               /* front end off, silent */
 int  radio_running(void);

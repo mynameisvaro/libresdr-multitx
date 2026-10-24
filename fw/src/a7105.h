@@ -48,6 +48,7 @@ struct a7105_info {
 	uint32_t rx_crc_errors, rx_fec_errors;
 	double   rx_offset_hz;      /* carrier offset of the last packet (rough) */
 	uint32_t rx_level;
+	uint32_t rx_arm_us, rx_arm_us_max;  /* receiver armed this long after the packet's start */
 	int      rx_len;
 	uint8_t  last_rx[40];       /* last packet received, as it went into the FIFO */
 };

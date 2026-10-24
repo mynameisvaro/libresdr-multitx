@@ -40,6 +40,7 @@ static struct radio_modem cur_modem;
 static double cur_gain = -1, lo_hz, band_hz = BAND_CAL_HZ;
 static double rate = DEFAULT_RATE, slice = MAX_SLICE_HZ;
 static int running, rx_follow, capture_next;
+static double power_offset_db;        /* added to every protocol's power (radio poffset) */
 
 void radio_set_rate(double hz)
 {
@@ -50,6 +51,17 @@ void radio_set_rate(double hz)
 void radio_rx_follow(int on)
 {
 	rx_follow = on;
+}
+
+void radio_set_power_offset(double db)
+{
+	power_offset_db = db;
+	cur_gain = -1;
+}
+
+double radio_power_offset(void)
+{
+	return power_offset_db;
 }
 
 void radio_capture_next(void)
@@ -160,7 +172,7 @@ static int prepare(double freq_hz, double dbm, double *offset)
 		stats.retunes++;
 	}
 
-	double gain = MAX_TX_GAIN - (MAX_DBM - dbm);
+	double gain = MAX_TX_GAIN - (MAX_DBM - (dbm + power_offset_db));
 	if (gain < 0)
 		gain = 0;
 	if (gain > MAX_TX_GAIN)

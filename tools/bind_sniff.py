@@ -11,16 +11,19 @@ over 38 and 37 bytes: Multiprotocol sends 38 and reads 37 back) and printed
 with its time after the previous packet, carrier offset (gfsk_rx's -25.6 kHz
 bias removed, tools/freq_cal.py) and level.
 
-  bind_sniff.py [--chan 140] [--seconds 20] [--rx-gain DB] [--save F.json]
+  bind_sniff.py [--chan 140] [--seconds 20] [--minutes M] [--rx-gain DB] [--save F.json]
   bind_sniff.py --load F.json
 
 Put the receiver in bind mode (power it with the bind button held), start the
-tool, then start the handset's bind within the first seconds.
+tool, then start the handset's bind within the first seconds. With --minutes
+it logs again and again (a run without the trigger is dropped) until the trigger
+fires or the time is up, so the bind can be started any time in that window.
 """
 
 import argparse
 import json
 import sys
+import time
 
 import a7105
 
@@ -69,6 +72,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--chan", type=int, default=140)
     ap.add_argument("--seconds", type=float, default=20)
+    ap.add_argument("--minutes", type=float, default=0, help="repeat until triggered, up to this long")
     ap.add_argument("--rx-gain", type=float, default=30)
     ap.add_argument("--save")
     ap.add_argument("--load")
@@ -85,11 +89,16 @@ def main():
     for c in ("mpm stop", "radio stop", "radio rate 61440000", "radio start", f"rf gain rx {a.rx_gain}"):
         con.run(c, timeout=30)
     freq = a7105.chan_freq(a.chan)
-    print(f"logging channel {a.chan} ({freq / 1e6:.3f} MHz) for {a.seconds:.0f} s: start the bind now")
-    # trigger: the code words of bytes 5..8 (bit 70 on) aren't FEC(ff ff ff ff), all ones
-    out = con.run(f"grx log {freq:.0f} 500000 {a7105.FLYSKY_ID.hex()} {NBYTES * 14} {a.seconds} "
-                  f"{5 * 14} {'f' * 14} 16", timeout=a.seconds + 30).strip()
-    print(f"  {out}")
+    print(f"logging channel {a.chan} ({freq / 1e6:.3f} MHz) for {a.seconds:.0f} s"
+          f"{f', again for up to {a.minutes:g} min' if a.minutes else ''}: start the bind now", flush=True)
+    t_end = time.time() + 60 * a.minutes
+    while True:
+        # trigger: the code words of bytes 5..8 (bit 70 on) aren't FEC(ff ff ff ff), all ones
+        out = con.run(f"grx log {freq:.0f} 500000 {a7105.FLYSKY_ID.hex()} {NBYTES * 14} {a.seconds} "
+                      f"{5 * 14} {'f' * 14} 16", timeout=a.seconds + 30).strip()
+        print(f"  {time.strftime('%H:%M:%S')} {out}", flush=True)
+        if "trigger" in out or time.time() > t_end:
+            break
     n = int(out.split()[0])
     entries = []
     for i in range(n):

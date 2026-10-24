@@ -32,7 +32,9 @@
 #include "a7105.h"
 #include "gfsk.h"
 #include "gfsk_rx.h"
+#include "hw.h"
 #include "radio.h"
+#include "timer.h"
 
 #define FXTAL 16e6
 
@@ -78,6 +80,7 @@ static double tx_test_dbm(uint8_t v)
 }
 
 #define GAUSS_BT  0.7       /* TX I.FS (data sheet) */
+#define LEAD_IN_BITS 16     /* carrier before the preamble (transmit()) */
 #define FIFO_SIZE 64
 
 static uint8_t regs[NREGS];
@@ -88,6 +91,7 @@ static uint8_t state = S_STANDBY, status;    /* status: CRCF/FECF from the last 
 static uint8_t rxq[FIFO_SIZE];
 static int     rxq_len;
 static int     rx_armed;
+static uint64_t tx_start;           /* timer ticks when the last packet started */
 
 /* SPI frame state */
 static int     selected, header_seen, rw_read, nbyte;
@@ -223,6 +227,11 @@ static void transmit(void)
 	memset(pkt, 0, sizeof(pkt));
 	nbits = 0;
 	int idl = (code & 0x04) ? 4 : 2;
+	/* Lead-in: a real A7105 (FS-i6X, logs/sniff_afhds2a_fsi6x.npz) ramps up and
+	 * sends ~16 bits of steady carrier (data high) before the preamble, so the
+	 * whole preamble goes out at full power. Without it our 20 us ramp ate the
+	 * first ~10 preamble bits. */
+	put_bits(0xFFFF, LEAD_IN_BITS);
 	for (int i = 0; i <= (code & 3); i++)
 		put_bits((id[0] & 0x80) ? 0xAA : 0x55, 8);
 	for (int i = 0; i < idl; i++)
@@ -260,6 +269,7 @@ static void transmit(void)
 		info.tx_errors++;
 		state = S_STANDBY;
 	} else {
+		tx_start = timer_ticks();
 		info.tx_packets++;
 		state = S_TX;
 	}
@@ -360,6 +370,9 @@ static void listen(void)
 	if (!radio_rx(rf_freq(), &c)) {
 		rx_armed = 1;
 		info.rx_arms++;
+		info.rx_arm_us = (uint32_t)((timer_ticks() - tx_start) / (CPU_HZ / 1000000u));
+		if (info.rx_arm_us > info.rx_arm_us_max && info.rx_arm_us < 100000)
+			info.rx_arm_us_max = info.rx_arm_us;
 	}
 }
 

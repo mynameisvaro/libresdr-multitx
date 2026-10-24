@@ -482,6 +482,12 @@ static int cmd_radio(int argc, char **argv)
 		radio_rx_follow(num(argv[2]) != 0);
 		return 0;
 	}
+	if (argc > 1 && !strcmp(argv[1], "poffset")) {
+		if (argc > 2)
+			radio_set_power_offset(strtod(argv[2], NULL));
+		printf("power offset %+.1f dB\n", radio_power_offset());
+		return 0;
+	}
 	if (argc > 1 && !strcmp(argv[1], "capture")) {
 		radio_capture_next();
 		return 0;
@@ -542,10 +548,11 @@ static int cmd_a7105(int argc, char **argv)
 		for (int i = 0; i < a->last_len; i++)
 			printf(" %02x", a->last_pkt[i]);
 		printf("\nreceive: %s, %lu times armed, %lu CRC errors, %lu FEC errors, offset %+.1f kHz, "
-		       "level %lu\nlast received (%d bytes):", gfsk_rx_present() ? "gfsk_rx" : "no gfsk_rx",
+		       "level %lu\narmed %lu us after the packet start (max %lu)\nlast received (%d bytes):",
+		       gfsk_rx_present() ? "gfsk_rx" : "no gfsk_rx",
 		       (unsigned long)a->rx_arms, (unsigned long)a->rx_crc_errors,
 		       (unsigned long)a->rx_fec_errors, a->rx_offset_hz / 1e3, (unsigned long)a->rx_level,
-		       a->rx_len);
+		       (unsigned long)a->rx_arm_us, (unsigned long)a->rx_arm_us_max, a->rx_len);
 		for (int i = 0; i < a->rx_len; i++)
 			printf(" %02x", a->last_rx[i]);
 		printf("\n");
@@ -979,7 +986,8 @@ static const struct shell_cmd cmds[] = {
 	  "                             binddone | stop | ch N VALUE | option N | id HEX |\n"
 	  "                             rxid HEX [RX] |\n"
 	  "                             hops [set HEX] | status", cmd_mpm, SHELL_LIVE },
-	{ "radio",   "SUBCMD ...",     "rate HZ | start | stop | rxfollow 0|1 | capture (next packet)", cmd_radio, 0 },
+	{ "radio",   "SUBCMD ...",     "rate HZ | start | stop | rxfollow 0|1 | poffset [DB] |\n"
+	  "                             capture (next packet)", cmd_radio, 0 },
 	{ "cc2500",  "",               "virtual CC2500 registers and last packet", cmd_cc2500, SHELL_LIVE },
 	{ "a7105",   "[SUBCMD ...]",   "virtual A7105: registers, last packet | coding |\n"
 	  "                             crc POLY INIT [REFLECT [XOROUT]] | fec HEX32 [lowfirst] | fec default |\n"
