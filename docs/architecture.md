@@ -176,6 +176,18 @@ shift that keeps R³ inside 18 bits, the offset tracker over about 4 bits.
 The AD9361 core delivers a sample every other `l_clk`: the pipeline follows
 `adc_valid` stage by stage (`hw/ip/gfsk_rx/tb/check.py` tests it that way).
 
+The offset estimate (`0x2C`) reads **25.6 kHz low** with the FlySky ID and
+settings (500 kbaud), at any offset (`tools/freq_cal.py`, 2026-10-24): the
+tracker averages the last bits before the freeze, and the ID's last byte isn't
+balanced. Subtract it when measuring a transmitter (`bind_sniff.py` does).
+
+`grx log FREQ BAUD SYNC NBITS SECONDS [TRIG_BIT TRIG_HEX [POST]]` (console) keeps
+every packet in a row in a ring of 96, re-arming within microseconds of each one,
+so a reply that follows a packet is kept too. It can stop POST packets after the
+first one whose kept bits from TRIG_BIT on differ from TRIG_HEX. `grx dump I`
+reads them, oldest first: sample counter, offset (Hz), level, sync errors, bits.
+Interrupts are off while it runs (at most ~40 s).
+
 ## USB debug bridge
 
 The FX3 keeps running Ettus' stock B200 firmware (UHD loads it, then the bitstream).
@@ -184,6 +196,10 @@ bulk IN `0x86`. The control endpoints (`0x04`/`0x88`) are drained and never answ
 
 All traffic is in 64-bit words, each sent as two little-endian 32-bit words, high
 half `[63:32]` first. Packets and responses must each stay ≤ 16 KB.
+Neither may be a whole multiple of 512 bytes (the USB max packet size, 1024 B at
+SuperSpeed): a bulk transfer ends at a short packet, so the FX3 would wait for
+more data. `usbdbg.py` adds status reads (`OP_CTRL_RD`) until neither length is
+one, and drops their results (found 2026-10-24 when a 251-word write hung).
 
 **Command packet**
 

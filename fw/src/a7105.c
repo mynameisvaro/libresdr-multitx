@@ -137,14 +137,32 @@ static double fpfd(void)
 	return FXTAL * ((regs[PLL_II] >> 7) + 1) / (((regs[PLL_II] >> 5) & 3) + 1);
 }
 
-/* Added to the frequency the registers give (transmit and receive): a real
- * FlySky handset was measured below where the data sheet maths puts its
- * channels; settable while that is worked out (a7105 foffset HZ). */
+/* Added to the frequency the registers give (transmit and receive), for
+ * experiments (a7105 foffset HZ). Default 0: an FS-i6X was measured on the data
+ * sheet formula (channel 140 + 24 kHz, tools/freq_cal.py, 2026-10-24). */
 static double freq_offset_hz;
 
 void a7105_set_freq_offset(double hz)
 {
 	freq_offset_hz = hz;
+}
+
+/* Test switch: rewrite Multiprotocol's AFHDS2A bind packets (bb/01, bc/01,
+ * bc/02 without a receiver ID) into the FS-i6X's pattern (bc, byte 9 = 00 for
+ * four packets, then 01 for four, ...; bytes 27-28 = 01 80), recorded in
+ * logs/bind_real_ch140.log. Packets with a receiver ID pass unchanged. */
+static int bind_like_handset;
+static uint32_t bind_count;
+
+void a7105_set_bind_like_handset(int on)
+{
+	bind_like_handset = on;
+	bind_count = 0;
+}
+
+int a7105_bind_like_handset(void)
+{
+	return bind_like_handset;
 }
 
 double a7105_freq_offset(void)
@@ -217,6 +235,13 @@ static void transmit(void)
 	if (txlen < len)                     /* underflow: the chip sends what's in the FIFO */
 		info.tx_errors++;
 	memcpy(body, txfifo, len);
+	if (bind_like_handset && len >= 38 && (body[0] == 0xBB || body[0] == 0xBC) &&
+	    body[5] == 0xFF && body[6] == 0xFF && body[7] == 0xFF && body[8] == 0xFF) {
+		body[0] = 0xBC;
+		body[9] = (bind_count++ >> 2) & 1;
+		body[27] = 0x01;
+		body[28] = 0x80;
+	}
 	int n = len;
 	if (code & 0x08) {                   /* CRCS */
 		uint16_t crc = crc16(body, len);
@@ -352,6 +377,7 @@ static int rx_body_len(void)
 
 static void listen(void)
 {
+	radio_tx_idle();
 	if (!gfsk_rx_present() || !radio_running())
 		return;
 	uint8_t code = regs[CODE_I];

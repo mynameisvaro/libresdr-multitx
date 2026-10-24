@@ -102,16 +102,15 @@ channels the handset itself announced in its bind packet, and exactly one CRC
 fitted: CRC-16 poly 0x1021, start 0x1D0F. It's now the firmware default.
 
 **The X6B didn't bind.** That one is still open. The board's bind packets are
-right in content, but the receiver never answered. Measuring the handset showed
-its channels well below where the data sheet's formula puts them (about 1 MHz at
-the bind channel), a real lead, though shifting by a fixed amount didn't fix it
-yet.
+right in content, but the receiver never answered. Measuring the handset seemed
+to show its channels well below where the data sheet's formula puts them (about
+1 MHz at the bind channel). The next morning that turned out to be a measuring
+mistake; [chapter 17](17-x6b-bind.md) follows the hunt.
 
 ## What it led to
 
-The receive path exists and works; the next step is the A7105's real channel
-frequencies, measured precisely from the handset, then the X6B bind and its
-telemetry through `gfsk_rx`. On the ExpressLRS side, the same ESP32 + SX1278 can
+The receive path exists and works; the next step was the X6B bind
+([chapter 17](17-x6b-bind.md)). On the ExpressLRS side, the same ESP32 + SX1278 can
 run ExpressLRS's own receiver firmware, which turns "a chip decodes our
 packets" into "a receiver follows our hops".
 

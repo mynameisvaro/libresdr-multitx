@@ -47,6 +47,7 @@ clock, register, AXI, block design, timing) with examples from this repository.
 | 14 | [LoRa, checked against real chips](14-lora.md) | ExpressLRS's physical layer: a model proven on SX1276 recordings, a chirp modulator in Verilog |
 | 15 | [ExpressLRS without a receiver](15-elrs.md) | ExpressLRS's own packet code, our scheduler, and two implementations that must agree |
 | 16 | [Receiving, and real chips as judges](16-receiving.md) | A GFSK receiver in the FPGA, three bugs simulation hid, an SX1278 and a handset as referees |
+| 17 | [The X6B that wouldn't bind](17-x6b-bind.md) | Checking the instruments first, recording the real exchange, and ruling causes out one by one (still open) |
 
 ## Timeline
 
@@ -69,3 +70,4 @@ clock, register, AXI, block design, timing) with examples from this repository.
 | 2026-10-23 | PPM input from a radio's trainer port: 6/6 on the board with the built-in generator | `d940810` |
 | 2026-10-23 | ExpressLRS 4.x at 900 MHz: 288 PC cases, 27/27 on the board | `ad3b496` |
 | 2026-10-24 | GFSK receive path 14/14 over the air; SX1278 receives ExpressLRS 306/307; A7105 coding learned from an FS-i6X | `b207096`…`16d5a50` |
+| 2026-10-24 | Frequency measurements calibrated; real FS-i6X ↔ X6B bind recorded; the board clones the FS-i6X (X6B locks, telemetry back); a 1024-byte USB bug fixed; X6B bind still open | `f5bff4a`, `0104e5b`, this chapter's commit |

@@ -20,6 +20,9 @@ board running a MultiTX bitstream.
 | [`lora_check.py`](lora_check.py) | sends LoRa frames from the board (`lora_tx`), captures them on RX2 and decodes them |
 | [`elrs.py`](elrs.py) | ExpressLRS 4.x model (independent of the firmware): UID from a binding phrase, CRCs, hop sequence, packet layouts, the TX's slot rules, packet parser ([docs/elrs.md](../docs/elrs.md)) |
 | [`gfsk_rx_check.py`](gfsk_rx_check.py) | the GFSK receiver on the board: gfsk_tx sends FlySky/FrSky-style packets, gfsk_rx must keep every bit (cable or antennas) |
+| [`freq_cal.py`](freq_cal.py) | calibrates the two ways of measuring a FlySky transmitter's frequency (captures, gfsk_rx's estimate) against the board's own packets at known offsets |
+| [`bind_sniff.py`](bind_sniff.py) | records an AFHDS2A bind between a real handset and receiver on one channel (`grx log`): each packet decoded, timed and its frequency given; `--minutes` keeps listening until it happens |
+| [`bind_replay.py`](bind_replay.py) | sends one recorded bind packet from the board, repeatedly, and logs what answers (one packet per bridge round trip, so not at protocol timing) |
 | [`sx127x_listen/`](sx127x_listen/sx127x_listen.ino) | ESP32 + SX1278/SX1276 sketch: LoRa listener (timestamp, RSSI, SNR, frequency error per packet) plus the SBUS monitor |
 | [`sx127x_listen.py`](sx127x_listen.py) | ExpressLRS from the board received by that SX127x: CRC/nonce, fields, arrival time vs nonce, frequency error |
 | [`elrs_check.py`](elrs_check.py) | runs ExpressLRS on the board: slot timing at every rate, then captured packets decoded (LoRa) and checked with `elrs.py` (CRC and nonce, channels, switches, hop table, sync fields) |

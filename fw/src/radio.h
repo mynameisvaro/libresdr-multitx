@@ -21,6 +21,11 @@ void radio_rx_follow(int on);        /* tune the RX LO with the TX LO (for captu
 /* dB added to the power every protocol asks for (the output isn't calibrated) */
 void radio_set_power_offset(double db);
 double radio_power_offset(void);
+/* TX attenuation to maximum between packets (radio_tx_idle, called when a
+ * virtual chip turns to receive) */
+void radio_set_quiet(int on);
+int radio_quiet(void);
+void radio_tx_idle(void);
 void radio_capture_next(void);       /* start adc_capture with the next packet */
 void radio_stop(void);               /* front end off, silent */
 int  radio_running(void);

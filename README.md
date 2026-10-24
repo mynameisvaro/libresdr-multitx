@@ -21,8 +21,9 @@ ExpressLRS's own over-the-air code.
 > **Status:** Multiprotocol's own FrSky D16 code, running unmodified on a virtual
 > CC2500, binds a real FrSky XM+ receiver and drives its channels exactly, with
 > 0.74% frames lost at 1 m, driven from the PC over USB with Multiprotocol's
-> own serial frames. FlySky (AFHDS/AFHDS2A) runs on a virtual A7105 and is
-> waiting for its on-air coding to be learned from a real handset. ExpressLRS 4.x
+> own serial frames. FlySky (AFHDS/AFHDS2A) runs on a virtual A7105 with
+> the on-air coding learned from a real FS-i6X: an FS-X6B follows the board when
+> it stands in for the handset, but doesn't bind to it yet. ExpressLRS 4.x
 > runs at 900 MHz on ExpressLRS's own packet code and passes every check short of a
 > real receiver, which is the next step. See the [roadmap](#roadmap).
 >
@@ -131,7 +132,8 @@ Running the board on a remote machine over USB/IP: [docs/remote-usb.md](docs/rem
 - [x] Bind a real FrSky receiver (XM+, D16): exact channels via SBUS, 0.74% frames lost ([results](docs/multiprotocol.md#testing-with-a-frsky-receiver))
 - [x] A7105 shim → FlySky AFHDS / AFHDS2A, verified off the air
 - [x] FlySky A7105 coding learned from a real FS-i6X (CRC and FEC, now the default; [docs](docs/multiprotocol.md#results-with-an-fs-i6x-and-an-x6b-2026-10-24))
-- [ ] FlySky receivers: the X6B doesn't bind to the board yet (lead: the A7105's real channel frequencies)
+- [x] FlySky AFHDS2A to a real FS-X6B with the handset's IDs (the board stands in for an FS-i6X): the X6B locks and sends telemetry back
+- [ ] FlySky bind: the X6B doesn't answer the board's bind yet (frequency, coding, content, power and the receive path ruled out; [docs](docs/multiprotocol.md#results-with-an-fs-i6x-and-an-x6b-2026-10-24), [journey 17](docs/journey/17-x6b-bind.md))
 - [x] Protocol callbacks on a timer interrupt: the console can't delay a packet ([journey ch. 12](docs/journey/12-timer-interrupt.md))
 - [x] Handset input from the PC: Multiprotocol serial frames over USB ([`multi_link.py`](tools/multi_link.py), [docs](docs/multiprotocol.md#handset-input-from-the-pc))
 - [x] A gamepad on the PC as the sticks ([`multi_link.py --gamepad`](tools/gamepad.py))

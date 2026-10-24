@@ -388,34 +388,63 @@ It is now the firmware default (`a7105_coding_default`). Decoded handset packets
 look as Multiprotocol expects: `58` (sticks) + TX ID `cc 05 b6 c4` + the bound
 receiver's ID + 14 channels in µs, little endian (`dc 05` = 1500).
 
-**The X6B did not bind to the board (open).** Multiprotocol's own AFHDS2A bind
-ran with the learned coding (sub-protocol 2, SBUS), and the board's receiver
-listened after every bind packet: no reply in ~90,000 receive windows, and
-`afhds2a_bind.py`'s capture search found none either. Ruled out: the CRC (all five
-candidates of the first solve; then the confirmed one), the coding registers
-(no whitening, FEC and CRC on, 4-byte ID), Multiprotocol's fine tune (CH15,
-±150 kHz). The receiver is fine (it binds to the FS-i6X).
+**The X6B does not bind to the board (open, 2026-10-24).** Everything on the
+board's side checks out on its own, and the X6B decodes the board in normal
+mode, but it never answers the board's bind packets. Step by step (logs in
+`logs/`, which git ignores):
 
-The lead: **frequency**. The handset's bind packets, captured at a known LO,
-are at about 2469.03 MHz, while the virtual A7105 puts channel 140 at
-2470.00 MHz (the data sheet maths: 2400 MHz + 140 × 500 kHz); `gfsk_rx` also
-found the handset's normal packets about 500 kHz below the channel it listened
-on. `a7105 foffset HZ` moves the virtual chip's channels; binding at −1000, −750
-and −500 kHz didn't work either (one round, 15 s each), so the rule isn't simply
-a fixed shift yet. Next: measure the handset's bind packets on both bind
-channels (13 and 140) and a few hop channels precisely, to get the real channel
-formula, then bind again.
+| Check | How | Result |
+|---|---|---|
+| Frequency measurements | `tools/freq_cal.py`: the board sends the FS-i6X's bind packet at known offsets (−750…+750 kHz) | capture method exact (−0.7 kHz); `gfsk_rx`'s estimate reads **25.6 kHz low** (a fixed bias with the FlySky ID), scale right |
+| Where the handset is | the same captures, re-read | channel 140 **+24 kHz**: on the data sheet formula. Last night's "2469.03 MHz" was the 1 MHz RX offset taken off twice; the "−505 kHz" `gfsk_rx` log was channel 139 (in the hop table) heard while tuned to 140 |
+| A real bind, recorded | `tools/bind_sniff.py` (`grx log`), channels 140 and 13 | see below |
+| Our bind packets on the air vs the handset's | captures at 4 MSPS | bit rate 500.00 kbps both; deviation on a run of 56 ones 186 vs 198 kHz; the handset sends ~16 bits of carrier before its 32-bit preamble, we didn't (fixed: `LEAD_IN_BITS`) |
+| Retune settling | captures at 61.44 MSPS from the packet start | flat to 1 kHz from the first preamble bit, both channels |
+| Does the X6B decode our signal? | **clone**: `mpm id 0xcc05b6c4`, `mpm rxid 5a459d41 0`, `mpm start flsky2a 2 0 0`, `mpm hops set 151d6266326a8b44542d255d957f7b76` | **yes**: LED solid, its telemetry (`aa cc05b6c4 5a459d41 …`) received with good CRCs |
+| Does the board hear replies during its bind? | board binding, FS-i6X in bind mode (its `bc`/01 looks like a reply) | **yes**: after ~100 s (both alternate channels every 3.85 ms; it takes their clocks drifting into step) 52 packets, and Multiprotocol "bound" with RX ID `ffffffff` |
+| Bind variants | Multiprotocol's sequence; the FS-i6X's pattern (`a7105 bindseq handset`); handset's TX ID + hop table; own ID | no answer |
+| Power | `radio poffset` −40, −30, −20, −10, 0, +10, +20, +26 dB; at 20 cm and with the antennas touching | no answer |
+| Receive timing | `a7105` status "armed … us after the packet start" | 1420 µs with `radio rxfollow 1` (1773 µs without, once 2084 µs); the reply comes ~1880 µs after the packet start |
 
-Also learned: a bound handset's normal packets give its TX ID, the receiver's
-ID and (from its bind packets) the hop table, so the board can stand in for the
-handset without binding (`mpm id`, `mpm rxid`, `mpm hops set`). Tried once with
-the IDs of the wrong model memory; worth repeating with the right ones
-(receiver ID `5a 45 9d 41` after the re-bind) once the frequencies are right.
+**The real bind** (FS-i6X ↔ X6B, `logs/bind_real_ch140.log`, `logs/bind_real_ch13.log`):
+
+| | Channel 13 | Channel 140 |
+|---|---|---|
+| Handset | `bb`/01, `bc`/01, `bc`/01, 7.7 ms apart | `bc`/00, `bc`/00, `bc`/01, `bc`/01 |
+| X6B reply | `bc` + TX ID + **`5a459d41`** + `01`, **1884 µs** after the packet, −42 kHz, level 123 | the same, 1883 µs, −27 kHz, level 139 |
+| Then | handset `bc` + RX ID + `02`; the X6B answers that too | handset `bc` + RX ID + `02`, then sticks |
+
+- The handset's sequence is Multiprotocol's (bb/bc, byte 9 = 01/02, bytes 27–28 = `01 80`); the X6B answers within 3–4 packets.
+- The handset's level alternates by ~12 dB from one packet to the next on each channel (2600 / 700): two power levels.
+- The X6B answers a bind ~10× weaker than its normal telemetry (level 123–139 at RX gain 30 vs 4800–12800 at gain 45).
+- It also sends telemetry (`aa …`) 1884 µs after some normal packets.
+
+**What is left** (ideas for the next session, cheapest first):
+
+1. **The TX between packets.** The board keeps its TX on (FDD), so its LO leakage
+   and noise are always on the air near the bind channels; a real A7105 is
+   silent between packets. If the X6B checks the channel is clear before it
+   answers a bind, it never would. `radio quiet 1` (TX attenuation to maximum
+   from the turn to receive until the next packet) is built but not tried with
+   the X6B. Note: with it on, the receiver is armed after fewer packets (43%
+   against 66% without, in a 4 s bind run); find out why first.
+2. **Alternating power**, as the handset does (two levels 12 dB apart).
+3. **Deviation** 198 kHz instead of 186 kHz, and the handset's pulse shape
+   (its frequency overshoots on runs of equal bits; ours, Gaussian BT 0.7, doesn't).
+4. Replaying the handset's recorded I/Q waveform would settle "signal vs
+   protocol" at once, but `gfsk_tx` can't play samples (it would need a small
+   playback block).
+
+Bind experiments need the X6B in bind mode (bind button held at power-up; it
+stays there), and each successful handset bind pairs it with the FS-i6X again.
+Run binds at 61.44 MSPS with `radio rxfollow 1` and `rf gain rx 45`. A clone or
+a bind with `mpm id 0xcc05b6c4` and the handset's hop table keeps the X6B
+working with the FS-i6X afterwards.
 
 ## Next
 
-- FlySky: the A7105's real channel frequencies (above), then the X6B bind and
-  its telemetry through `gfsk_rx`.
+- FlySky: the X6B bind (above; frequency, coding, content and the receive path
+  are ruled out), then AFHDS2A telemetry from `gfsk_rx` into Multiprotocol.
 - More handset inputs: PPM from a FlySky trainer port on the GPIO pins (the
   frames over USB and the gamepad are done).
 - Receive in the virtual CC2500 (FrSky telemetry; needs a receiver that sends

@@ -40,7 +40,8 @@ static struct radio_modem cur_modem;
 static double cur_gain = -1, lo_hz, band_hz = BAND_CAL_HZ;
 static double rate = DEFAULT_RATE, slice = MAX_SLICE_HZ;
 static int running, rx_follow, capture_next;
-static double power_offset_db;        /* added to every protocol's power (radio poffset) */
+static double power_offset_db;
+static int tx_quiet;                  /* TX attenuation to maximum between packets (radio quiet) */        /* added to every protocol's power (radio poffset) */
 
 void radio_set_rate(double hz)
 {
@@ -62,6 +63,27 @@ void radio_set_power_offset(double db)
 double radio_power_offset(void)
 {
 	return power_offset_db;
+}
+
+void radio_set_quiet(int on)
+{
+	tx_quiet = on;
+}
+
+int radio_quiet(void)
+{
+	return tx_quiet;
+}
+
+/* After a packet, when the chip turns to receive: with radio quiet on, the TX
+ * attenuation goes to maximum, so the LO leakage and noise between packets drop
+ * by ~90 dB (a real chip sends nothing then); prepare() restores the gain. */
+void radio_tx_idle(void)
+{
+	if (tx_quiet && running && !radio_tx_busy()) {
+		rf_set_gain(RF_TX, 0, NULL);
+		cur_gain = 0;
+	}
 }
 
 void radio_capture_next(void)
